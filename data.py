@@ -3,7 +3,8 @@ from numpy import array,meshgrid,arange
 from rasterio.transform import xy
 from rasterio import open
 from geopandas import GeoSeries, GeoDataFrame,read_file
-from shapely.geometry import Point, box
+from shapely.geometry import Point,box
+# import shapely as shp
 from pandas import Series,concat
 from math import pi,cos
 import h3
@@ -74,11 +75,10 @@ def square_poly(lat, lon, distance=10_000):
     dphi = distance/cos(lat_rad)/earth_radius_meters/pi*180
     dtheta = distance/earth_radius_meters/pi*180
 
-
     xlim = (lon-dphi,lon+dphi)
     ylim = (lat-dtheta,lat+dtheta)
 
-    res = box(xmin=xlim[0],xmax=xlim[1],ymin=ylim[0],ymax=ylim[1])
+    res = box(minx=xlim[0],maxx=xlim[1],miny=ylim[0],maxy=ylim[1])
 
     # return gpd.GeoSeries([res],crs=4326)
     # gpd.GeoDataFrame(geometry = gpd.GeoSeries([res],crs=4326))
