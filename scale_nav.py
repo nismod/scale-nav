@@ -9,8 +9,8 @@ def change_scale(grid,level = 1):
 
     res = h3.get_resolution(grid.h3_id.to_list()[0])
 
-    if (res+level)>11 or (res+level)<3: 
-        raise ValueError("Resolution exceeded the allowed boundaries 3 - 11")
+    if (res+level)>13 or (res+level)<3: 
+        raise ValueError("Resolution exceeded the allowed boundaries 3 - 13")
 
     grid = grid.copy()
 
