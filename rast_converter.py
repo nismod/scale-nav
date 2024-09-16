@@ -16,32 +16,13 @@ from pyarrow import float32,schema,field,uint16,table,Table
 from pyarrow.parquet import ParquetWriter
 from glob import glob
 
-parser = argparse.ArgumentParser(
-                    prog='Rast Converter',
-                    description='Convert rasters to csv',
-                    epilog='')
+def rast_converter(in_path, out_path="rast_convert.parquet"):
 
-parser.add_argument('in_path',help="A path to a folder containing '.tif' files.")
-parser.add_argument('out_path',nargs="?",default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
-parser.add_argument('grid_size',nargs="?",default=1000,help="A grid size value for the original rasters.", type=int)
-
-# parser.add_argument('-v', '--verbose',
-#                     action='store_true') 
-
-args = vars(parser.parse_args())
-
-in_path = args["in_path"]
-out_path = args["out_path"]
-grid_size = args["grid_size"]
-
-def main(in_path, out_path, grid_size):
+        if exists(out_path): return print("File exists;")    
 
         if not search(pattern=r".parquet$",string=out_path):
-                    raise ValueError("Provide a filename with .parquet extension to write the outputs.")
+                    raise ValueError("Provide a 'parquet' filename to write the outputs.")
         
-        if exists(out_path): return print("File exists;")    
-        # grid_size = 10_000 # get_grid_size() ?
-
         rast_schema = schema([('lon',float32())
                          ,('lat',float32())
                          ,('band',float32())
@@ -53,9 +34,12 @@ def main(in_path, out_path, grid_size):
               "band" : "Value associated",
                                    })
 
-        in_paths = [x for x in glob(in_path + "/**",recursive=True) if search(pattern=r".ti[f]{1,2}$",string=x)]
+        in_paths = [x for x in glob(in_path, recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
 
-        print("Reading the following files: ",*in_paths)
+        if len(in_paths)==0: 
+              raise IOError("No input files recognised.")
+        
+        print("Reading the following file(s): ",*in_paths)
 
         with ParquetWriter(out_path, rast_schema) as writer:
             for path in in_paths:
@@ -69,16 +53,41 @@ def main(in_path, out_path, grid_size):
 
                     lons = array(xs)
                     lats = array(ys)
-
+                    
+                    nodata = src.nodatavals[0]
+                    
                     out = DataFrame({"band" : array(band1).flatten()
                                             ,'lon': lons.flatten()
                                             ,'lat': lats.flatten()})
                     
-                    out.drop(index=out.loc[out.band==src.nodatavals].index,inplace=True)
+                    out.drop(index=out.loc[out.band==nodata].index,inplace=True)
                     out.drop(index=out.loc[out.band<=0].index,inplace=True)
 
                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
 
 
 if __name__=="__main__":
-    main(in_path=in_path,out_path=out_path,grid_size=grid_size)
+    
+    parser = argparse.ArgumentParser(
+                        prog='Rast Converter',
+                        description='Convert rasters to parquet files',
+                        epilog='')
+
+    parser.add_argument('in_path',help="A path to a folder containing '.tif' files.")
+    parser.add_argument('out_path',nargs="?",default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
+    # parser.add_argument('grid_size',nargs="?",default=1000,help="A grid size value for the original rasters.", type=int)
+
+    # parser.add_argument('-v', '--verbose',
+    #                     action='store_true') 
+
+    args = vars(parser.parse_args())
+
+    in_path = args["in_path"]
+    out_path = args["out_path"]
+    # grid_size = args["grid_size"]
+
+    rast_converter(
+          in_path=in_path
+          ,out_path=out_path
+        #   ,grid_size=grid_size
+          )
