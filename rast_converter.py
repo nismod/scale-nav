@@ -1,0 +1,84 @@
+import sys 
+import argparse
+from os.path import exists
+from numpy import meshgrid,arange,array
+from rasterio.transform import xy
+from rasterio import open
+# from rasterio.warp import re
+from geopandas import GeoSeries, GeoDataFrame,read_file
+from shapely.geometry import Point,box
+# import shapely as shp
+from pandas import Series,concat, DataFrame
+from math import pi,cos
+import h3
+from re import search
+from pyarrow import float32,schema,field,uint16,table,Table
+from pyarrow.parquet import ParquetWriter
+from glob import glob
+
+parser = argparse.ArgumentParser(
+                    prog='Rast Converter',
+                    description='Convert rasters to csv',
+                    epilog='')
+
+parser.add_argument('in_path',help="A path to a folder containing '.tif' files.")
+parser.add_argument('out_path',nargs="?",default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
+parser.add_argument('grid_size',nargs="?",default=1000,help="A grid size value for the original rasters.", type=int)
+
+# parser.add_argument('-v', '--verbose',
+#                     action='store_true') 
+
+args = vars(parser.parse_args())
+
+in_path = args["in_path"]
+out_path = args["out_path"]
+grid_size = args["grid_size"]
+
+def main(in_path, out_path, grid_size):
+
+        if not search(pattern=r".parquet$",string=out_path):
+                    raise ValueError("Provide a filename with .parquet extension to write the outputs.")
+        
+        if exists(out_path): return print("File exists;")    
+        # grid_size = 10_000 # get_grid_size() ?
+
+        rast_schema = schema([('lon',float32())
+                         ,('lat',float32())
+                         ,('band',float32())
+                         ])
+
+        rast_schema.with_metadata({
+              "lon" : "Longitude coordinate",
+              "lat" : "Latitude coordinate",
+              "band" : "Value associated",
+                                   })
+
+        in_paths = [x for x in glob(in_path + "/**",recursive=True) if search(pattern=r".ti[f]{1,2}$",string=x)]
+
+        print("Reading the following files: ",*in_paths)
+
+        with ParquetWriter(out_path, rast_schema) as writer:
+            for path in in_paths:
+                with open(path) as src:
+                    # src.re
+                    band1 = src.read(1)
+                    height = band1.shape[0]
+                    width = band1.shape[1]
+                    cols, rows = meshgrid(arange(width), arange(height))
+                    xs, ys = xy(transform = src.transform, rows=rows, cols=cols)
+
+                    lons = array(xs)
+                    lats = array(ys)
+
+                    out = DataFrame({"band" : array(band1).flatten()
+                                            ,'lon': lons.flatten()
+                                            ,'lat': lats.flatten()})
+                    
+                    out.drop(index=out.loc[out.band==src.nodatavals].index,inplace=True)
+                    out.drop(index=out.loc[out.band<=0].index,inplace=True)
+
+                    writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
+
+
+if __name__=="__main__":
+    main(in_path=in_path,out_path=out_path,grid_size=grid_size)

@@ -22,7 +22,7 @@ def rast_to_centroid(out_path,tiff_paths):
     
     """
     if not search(pattern=".parquet$",string=out_path):
-        raise ValueError("Provide a filenae with .parquet extension to write the outputs.")
+        raise ValueError("Provide a filename with .parquet extension to write the outputs.")
     
     if exists(out_path):
         print("Reading existing file")    
