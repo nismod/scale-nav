@@ -1,16 +1,14 @@
-import sys 
+# import sys
 import argparse
 from os.path import exists
 from numpy import meshgrid,arange,array
 from rasterio.transform import xy
 from rasterio import open
 # from rasterio.warp import re
-from geopandas import GeoSeries, GeoDataFrame,read_file
-from shapely.geometry import Point,box
 # import shapely as shp
-from pandas import Series,concat, DataFrame
-from math import pi,cos
-import h3
+from pandas import DataFrame
+# from math import pi,cos
+# import h3
 from re import search
 from pyarrow import float32,schema,field,uint16,table,Table
 from pyarrow.parquet import ParquetWriter

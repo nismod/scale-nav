@@ -32,6 +32,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 license = {text = "MIT License"}
+keywords = {}
+
 
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"

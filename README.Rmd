@@ -1,0 +1,20 @@
+---
+title: "Navigating spatial scales"
+# author: "Ivann Schlosser"
+# date: "2024-08-16"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,eval = FALSE,include = TRUE)
+
+```
+
+## Introduction
+
+This is a python module that helps change scales of spatial data sets. It relies on the [H3](https://h3geo.org) hexagonal grid's hierarchical indexing functionalities and aims to add to that the data transformations that need to be done when navigating between levels of the hierarchy.
+
+A presentation on the topic can be found [here](https://ischlo.github.io/presentations/down_scaling){target="\_blank"}
+
+### THIS MODULE IS UNDER DEVELOPMENT
+More content will be added soon.
