@@ -4,22 +4,29 @@ from rasterio.transform import xy
 from rasterio import open
 # from rasterio.warp import re
 from geopandas import GeoSeries, GeoDataFrame,read_file
-from shapely.geometry import Point,box
+from shapely.geometry import Point,box,Polygon
 # import shapely as shp
 from pandas import Series,concat, DataFrame
 from math import pi,cos
 import h3
 from re import search
 
-def rast_to_centroid(out_path,tiff_paths):
+def rast_to_centroid(out_path,in_paths):
     """
     Convert a bunch of raster files given by their file location in a list into a single geospatial file containing the centroids of cells.
     If the out_path exists, then simply read it. 
+    This will be replaced by the command line tool and higher performance function using pyArrow.
     
-    out_path : str, is a single path to a geojson file. 
+    Parameters
+    -----------
+    out_path : str, is a single path to a parquet file. 
     
-    tiff_paths : list(str), is a list of paths to .tiff files.
-    
+    in_paths : list(str), is a list of paths to .tiff or .nc files.
+
+    Returns
+    ----------
+    a pandas.DataFrame with columns lon, lat and band.
+
     """
     if not search(pattern=".parquet$",string=out_path):
         raise ValueError("Provide a filename with .parquet extension to write the outputs.")
@@ -29,7 +36,7 @@ def rast_to_centroid(out_path,tiff_paths):
         grid = read_file(out_path)
     else:
         grids = []
-        for path in tiff_paths:
+        for path in in_paths:
             with open(path) as src:
                 # src.re
                 band1 = src.read(1)
@@ -56,19 +63,50 @@ def rast_to_centroid(out_path,tiff_paths):
     
 
 def df_project_on_grid(data : GeoDataFrame,res : int = 11):
+    """ Project a geopandas.GeoDataFrame containing points on the H3 grid at a given resolution. 
+
+    Parameters
+    -----------
+    data : a geopandas.GeoDataFrame with a geometry column containing points.
+    res : a integer value of H3 resolution.
+    
+    Return
+    ----------
+    The original data frame with a new column called h3_id ccontaining the H3 code for each geometry. 
+
+    """
+
     data["h3_id"] = data["geometry"].apply(lambda point: h3.latlng_to_cell(lng=point.x,lat=point.y,res=res))
     return data
     
 def df_project_on_grid(data : DataFrame,res : int = 11):
+    """ Project a pandas.DataFrame containing points coordinates on the H3 grid at a given resolution. 
+
+    Parameters
+    -----------
+    data : a pandas.DataFrame with x,y column containing containing coordinates.
+    res : a integer value of H3 resolution.
+    
+    Return
+    ----------
+    The original data frame with a new column called h3_id ccontaining the H3 code for each geometry. 
+
+    """
     data["h3_id"] = data[["x","y"]].apply(lambda point: h3.latlng_to_cell(lng=point.loc["x"],lat=point.loc["y"],res=res),axis=1)
     return data
 
 def pt_project_on_grid(lat,lon,res : int = 11):
+    """ Get H3 index of lat,lon coordinates for a resolution. Simple wrapper around the H3.latlng_to_cell function.
+
+    """
     return h3.latlng_to_cell(lng=lon,lat=lat,res=res)
 
 
-def square_poly(lat, lon, distance=10_000):
-    """ distances in meters ! Return the shape of the raster cell from the centroid and size. Assuming square cells."""
+def square_poly(lat, lon, distance=10_000) -> Polygon:
+    """ Make a square box with side size given in the distance parameter centered on the (lon,lat) point. 
+    The distance is expected to be in meters. The coordinates in degrees according to WGS:84. 
+    
+    """
     # distance *= 1
     distance /= 2
     earth_radius_meters = 6378137.0
@@ -113,7 +151,7 @@ def square_poly(lat, lon, distance=10_000):
 
 
 def rast_to_h3_map(x : float = 51.51176, y : float = -0.1227):
-
+    
     rast_to_h3 = {
         "10" : {"h3_res" : 13,
                 "nn" : []},
@@ -161,7 +199,7 @@ def rast_to_h3_map(x : float = 51.51176, y : float = -0.1227):
 rast_to_h3 = rast_to_h3_map(x = 0, y = 0)
 
 
-def centre_cell_to_square(h3_cell,neighbs,grid_param = 10_000):
+def centre_cell_to_square(h3_cell,neighbs,grid_param = 10_000) -> list[str]:
 
     """If a centroid h3 index is known, return the square cover for a cell and grid_param"""
 

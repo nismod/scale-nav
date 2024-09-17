@@ -15,6 +15,18 @@ from pyarrow.parquet import ParquetWriter
 from glob import glob
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
+        """ Convert a rater file into a parquet table with at least 3 columns, 2 columns for the coordinates and the remaining for the value bands. The data is written into a external file.
+        Also usable as a command line tool in which the function parameters are read from the console. 
+
+        Future imporvements will include automatic recognition of the data epsg and grid cell size to add it into the metadata of the table.
+
+        Parameters
+        ------------
+        in_path : the path to a folder containing the raster files to be converted. The function will look for files with a .tiff, .tif, .nc extensions. 
+        
+        out_path : the path to a parquet file into which to write the data.
+
+        """
 
         if exists(out_path): return print("File exists;")    
 
@@ -66,6 +78,7 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
 
 if __name__=="__main__":
     
+
     parser = argparse.ArgumentParser(
                         prog='Rast Converter',
                         description='Convert rasters to parquet files',

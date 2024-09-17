@@ -3,5 +3,6 @@ h3-py-notebooks/
 deck_maps/
 outputs/
 .Rproj.user
-.Rproj
+*.Rproj
 .Rhistory
+.DS_Store
