@@ -35,7 +35,8 @@ def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,
     p = compile("_var$")
 
     var_columns = [x for x in grid.columns if search(p,x)]
-    
+    var_operations = {x:"sum" for x in var_columns}
+
     try : 
         grid.drop(columns="geom",inplace=True)
         print("Skipping geom")
@@ -54,13 +55,13 @@ def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,
         return grid
     
     if int(level)==-1:
-        var_operations = {x:"sum" for x in var_columns}
+
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid=grid.groupby("parent").agg({"h3_id":list,**var_operations}).reset_index().rename(columns = {"h3_id":"child_cells"}).rename(columns = {"parent":"h3_id"})
         return grid
     
     if int(level)<=-2:
-        var_operations = {x:"sum" for x in var_columns}
+        
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid=grid.groupby("parent").agg({"h3_id":list,**var_operations}).reset_index().rename(columns = {"h3_id":"child_cells"}).rename(columns = {"parent":"h3_id"})
         

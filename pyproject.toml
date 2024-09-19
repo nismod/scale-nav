@@ -3,7 +3,7 @@ requires = ["flit_core>=3.4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "scale-nav"
+name = "scalenav"
 version = "0.0.1"
 authors = [
   { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },
@@ -14,10 +14,7 @@ maintainers = [
 description = "A packge to project all sorts of data on the H3 grid and manipulate it at different scales."
 readme = "README.md"
 dependencies = [
-    "os"
-    ,"re"
-    ,"math"
-    ,"numpy"
+    "numpy"
     ,"pandas"
     ,"rasterio"
     ,"shapely"
@@ -32,7 +29,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 license = {text = "MIT License"}
-keywords = {}
+keywords = ['hierarchical index','rescaling','geospatial']
 
 
 [project.urls]

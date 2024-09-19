@@ -15,6 +15,7 @@ from pyarrow.parquet import ParquetWriter
 from glob import glob
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
+        
         """ Convert a rater file into a parquet table with at least 3 columns, 2 columns for the coordinates and the remaining for the value bands. The data is written into a external file.
         Also usable as a command line tool in which the function parameters are read from the console. 
 
@@ -35,13 +36,13 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
         
         rast_schema = schema([('lon',float32())
                          ,('lat',float32())
-                         ,('band',float32())
+                         ,('band_var',float32())
                          ])
 
         rast_schema.with_metadata({
               "lon" : "Longitude coordinate",
               "lat" : "Latitude coordinate",
-              "band" : "Value associated",
+              "band_var" : "Value associated",
                                    })
 
         in_paths = [x for x in glob(in_path, recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
@@ -64,20 +65,20 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
                     lons = array(xs)
                     lats = array(ys)
                     
-                    nodata = src.nodatavals[0]
+                    if len(src.nodatavals)>1:
+                          nodata = src.nodatavals[0]
                     
-                    out = DataFrame({"band" : array(band1).flatten()
+                    out = DataFrame({"band_var" : array(band1).flatten()
                                             ,'lon': lons.flatten()
                                             ,'lat': lats.flatten()})
                     
-                    out.drop(index=out.loc[out.band==nodata].index,inplace=True)
-                    out.drop(index=out.loc[out.band<=0].index,inplace=True)
+                    out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+                    out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
 
                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
 
 
 if __name__=="__main__":
-    
 
     parser = argparse.ArgumentParser(
                         prog='Rast Converter',
