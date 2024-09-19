@@ -1,10 +1,14 @@
 # plotting.py
-from numpy import max,nan_to_num
+from numpy import max,nan_to_num,log1p
+from pandas import Series
 # from pypalettes import 
 
-def cmap(input, palette) -> list[int]:
-    
-    input = nan_to_num(input).tolist()
+def cmap(input : [Series,list], palette, log : bool = False) -> list[int]:
+    # input = []
+    if log:
+        input = nan_to_num(log1p(input)).tolist()
+    else:
+        input = nan_to_num(input).tolist()
     m = max(input)
     l = palette.N
     print(f"Max input : {m:.2f}, palette colors : {l}")

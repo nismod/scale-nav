@@ -5,7 +5,7 @@ import h3
 # import pandas as pd
 from pandas import DataFrame
 from re import search,compile
-from utils import res_upper_limit,res_lower_limit,child_num
+from scalenav.utils import res_upper_limit,res_lower_limit,child_num
 
 
 def set_scale(grid : [DataFrame,GeoDataFrame],final : int = 8) -> [DataFrame,GeoDataFrame] : # type: ignore

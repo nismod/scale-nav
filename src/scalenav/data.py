@@ -10,9 +10,9 @@ from pandas import Series,concat, DataFrame
 from math import pi,cos
 import h3
 from re import search
-from utils import earth_radius_meters,A,alpha
+from scalenav.utils import earth_radius_meters,A,alpha
 
-def rast_to_centroid(out_path : str, in_paths : str):
+def rast_to_centroid(out_path : str, in_paths : list[str]):
     """
     Convert a bunch of raster files given by their file location in a list into a single geospatial file containing the centroids of cells.
     If the out_path exists, then simply read it. 
