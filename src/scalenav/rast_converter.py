@@ -55,7 +55,9 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
         with ParquetWriter(out_path, rast_schema) as writer:
             for path in in_paths:
                 with open(path) as src:
-                    # src.re
+                    
+                  #   have a buffering here that can read and process chunks in parallel. 
+                  
                     band1 = src.read(1)
                     height = band1.shape[0]
                     width = band1.shape[1]

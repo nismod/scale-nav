@@ -10,6 +10,7 @@ from pandas import Series,concat, DataFrame
 from math import pi,cos
 import h3
 from re import search
+from utils import earth_radius_meters,A,alpha
 
 def rast_to_centroid(out_path : str, in_paths : str):
     """
@@ -34,7 +35,7 @@ def rast_to_centroid(out_path : str, in_paths : str):
     if exists(out_path):
         print("Reading existing file")    
         grid = read_file(out_path)
-        
+
     else:
         grids = []
         for path in in_paths:
@@ -110,8 +111,6 @@ def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "
     """
     half_distance = distance/2
 
-    earth_radius_meters = 6378137.0
-
     lat_rad = pi*lat/180
 
     dphi = half_distance/cos(lat_rad)/earth_radius_meters/pi*180
@@ -161,14 +160,8 @@ def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "
 def rast_to_h3_map(x : float = 0.0, y : float = 51.51, ref : str = "m", dist : float = 0):
     """Allows adding a custom distance value for unusual grid shapes and specify if the raster cells are in projected or arc sizes."""
 
-
-    extra_res = 0
     grid_params = []
     res_params = []
-
-    alpha = 5/log(1_000)
-
-    A = 13 + alpha*log(10)
 
     if dist > 0 : 
 
@@ -229,5 +222,10 @@ def centre_cell_to_square(h3_cell : str, neighbs : list[tuple[int]]) -> list[str
     ref_cell_ij = h3.cell_to_local_ij(origin=h3_cell,h=h3_cell)
 
     return [h3.local_ij_to_cell(origin=h3_cell,i=cell_i+ref_cell_ij[0],j=cell_j+ref_cell_ij[1]) for (cell_i,cell_j) in neighbs]
+
+
+def layer_constrain(layer : [DataFrame,GeoDataFrame], constraint : [DataFrame,Series]):
+    """Apply a constraint to a layer. Remove the constrained cells from the layer and renormalise the values."""
+    return layer
 
 

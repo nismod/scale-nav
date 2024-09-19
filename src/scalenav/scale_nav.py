@@ -5,13 +5,23 @@ import h3
 # import pandas as pd
 from pandas import DataFrame
 from re import search,compile
+from utils import res_upper_limit,res_lower_limit,child_num
+
+
+def set_scale(grid : [DataFrame,GeoDataFrame],final : int = 8) -> [DataFrame,GeoDataFrame] : # type: ignore
+    
+    """Similarly to the change_scale function, but sets the resolution to a specific value."""
+
+    if final>res_upper_limit or final<res_lower_limit:
+        raise ValueError("Please provide an allowed resolution value")
+    
+    levels = final - h3.get_resolution(grid.h3_id.to_list()[0])
+    
+    return change_scale(grid=grid,level=levels)
+
 
 def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,GeoDataFrame] : # type: ignore
-    
-    # export this into settings or setup ?  
-    res_upper_limit = 13
-    res_lower_limit = 3
-
+  
     f""" Change scale of a data frame using the H3 hieararchical index.
 
     Parameters
@@ -23,14 +33,13 @@ def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,
     level : a positive or integer value giving the relative scale change to perform. In other words, the final H3 resolution of the data will be equal to the resolution before change + level. The final resolution should be within {res_lower_limit}-{res_upper_limit}.
 
     """
+
     res = h3.get_resolution(grid.h3_id.to_list()[0])
 
     if (res+level)>res_upper_limit or (res+level)<res_lower_limit: 
         raise ValueError(f"Resolution exceeded the allowed boundaries {res_lower_limit} - {res_upper_limit}")
 
     grid = grid.copy()
-
-    child_num=7
     
     p = compile("_var$")
 
