@@ -1,7 +1,8 @@
 # Navigating spatial scales
 
 
-[![python](https://img.shields.io/badge/Python-3.9-3776AB.svg?style=flat&logo=python&logoColor=white)](https://github.com/nismod/scale-nav/blob/main/.github/workflows/run-package.yml)
+![GitHub Actions Workflow
+Status](https://img.shields.io/github/actions/workflow/status/nismod/scale-nav/run-package.yml?style=flat)
 ![PyPI -
 Version](https://img.shields.io/pypi/v/scalenav?style=plastic&logoColor=grey&logoSize=auto&labelColor=blue&color=gray&link=https%3A%2F%2Fpypi.org%2Fproject%2Fscalenav%2F)
 
