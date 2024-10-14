@@ -1,13 +1,14 @@
 ---
 title: "Navigating spatial scales"
-# author: "Ivann Schlosser"
-# date: "2024-08-16"
-output: github_document
+output: gfm
 ---
+
+[![python](https://img.shields.io/badge/Python-3.9-3776AB.svg?style=flat&logo=python&logoColor=white)](https://github.com/nismod/scale-nav/blob/main/.github/workflows/run-package.yml)
+![version](https://img.shields.io/badge/version-0.0.1-blue)
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,eval = FALSE,include = TRUE)
-
 ```
 
 ## Introduction
