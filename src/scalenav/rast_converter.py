@@ -55,30 +55,27 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
         with ParquetWriter(out_path, rast_schema) as writer:
             for path in in_paths:
                 with open(path) as src:
-                    
-                  #   have a buffering here that can read and process chunks in parallel. 
-                  
-                    band1 = src.read(1)
-                    height = band1.shape[0]
-                    width = band1.shape[1]
-                    cols, rows = meshgrid(arange(width), arange(height))
-                    xs, ys = xy(transform = src.transform, rows=rows, cols=cols)
+                        #   have a buffering here that can read and process chunks in parallel. 
+                        band1 = src.read(1)
+                        height = band1.shape[0]
+                        width = band1.shape[1]
+                        cols, rows = meshgrid(arange(width), arange(height))
+                        xs, ys = xy(transform = src.transform, rows=rows, cols=cols)
 
-                    lons = array(xs)
-                    lats = array(ys)
-                    
-                    if len(src.nodatavals)>1:
-                          nodata = src.nodatavals[0]
-                    
-                    out = DataFrame({"band_var" : array(band1).flatten()
-                                            ,'lon': lons.flatten()
-                                            ,'lat': lats.flatten()})
-                    
-                    out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                    out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+                        lons = array(xs)
+                        lats = array(ys)
+                        
+                        if len(src.nodatavals)>1:
+                              nodata = src.nodatavals[0]
+                        
+                        out = DataFrame({"band_var" : array(band1).flatten()
+                                                ,'lon': lons.flatten()
+                                                ,'lat': lats.flatten()})
+                        
+                        out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+                        out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
 
-                    writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
-
+                        writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
 
 if __name__=="__main__":
 

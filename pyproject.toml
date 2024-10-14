@@ -11,7 +11,7 @@ authors = [
 maintainers = [
   { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },
 ]
-description = "A packge to project all sorts of data on the H3 grid and manipulate it at different scales."
+description = "A package to project all sorts of data on the H3 grid and manipulate it at different spatial scales."
 readme = "README.md"
 dependencies = [
     "numpy"
@@ -31,7 +31,9 @@ classifiers = [
 license = {text = "MIT License"}
 keywords = ['hierarchical index','rescaling','geospatial']
 
-
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"
 Issues = "https://github.com/nismod/scale-nav/issues"
+
+[tool.flit.external-data]
+directory = "data"

@@ -3,7 +3,7 @@ from numpy import max,nan_to_num,log1p
 from pandas import Series
 # from pypalettes import 
 
-def cmap(input : [Series,list], palette, log : bool = False) -> list[int]:
+def cmap(input : [Series,list], palette, log : bool = False) -> list[int]: # type: ignore
     # input = []
     if log:
         input = nan_to_num(log1p(input)).tolist()
