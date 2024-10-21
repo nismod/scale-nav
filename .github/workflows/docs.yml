@@ -38,7 +38,7 @@ jobs:
     #         build-command: "sphinx-build -b html . _build"
         run: |
           sudo apt-get install pandoc
-          python -m pip install --upgrade pip wheel flit
+          python -m pip install --upgrade pip wheel flit sphinx
           pip install --verbose .[docs]
 
       - name: Build docs
