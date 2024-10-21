@@ -39,7 +39,6 @@ jobs:
 
       - name: Build docs
         run: |
-          pushd docs
           sphinx-build -M html source build
           make html
           popd
