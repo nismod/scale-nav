@@ -5,6 +5,9 @@ from pandas import Series
 
 def cmap(input : [Series,list], palette, log : bool = False) -> list[int]: # type: ignore
     # input = []
+    # if type(input[0])==str:
+    #     input = [int(x) for x in input]
+
     if log:
         input = nan_to_num(log1p(input)).tolist()
     else:
@@ -13,6 +16,7 @@ def cmap(input : [Series,list], palette, log : bool = False) -> list[int]: # typ
     l = palette.N
     print(f"Max input : {m:.2f}, palette colors : {l}")
     return [[int(255*j) for j in palette(int(x/m*l))] for x in input]
+    
 
 
 

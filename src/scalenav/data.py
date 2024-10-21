@@ -11,6 +11,8 @@ from math import pi,cos
 import h3
 from re import search
 from scalenav.utils import earth_radius_meters,A,alpha
+# from overloading import overload
+from functools import singledispatch
 
 def rast_to_centroid(out_path : str, in_paths : list[str]):
     """
@@ -64,7 +66,8 @@ def rast_to_centroid(out_path : str, in_paths : list[str]):
         return grid
     
 
-def df_project_on_grid(data : GeoDataFrame, res : int = 11):
+@singledispatch
+def df_project_on_grid(data : GeoDataFrame, res : int = 11) -> GeoDataFrame:
     """ Project a geopandas.GeoDataFrame containing points on the H3 grid at a given resolution. 
 
     Parameters
@@ -80,8 +83,10 @@ def df_project_on_grid(data : GeoDataFrame, res : int = 11):
 
     data["h3_id"] = data["geometry"].apply(lambda point: h3.latlng_to_cell(lng=point.x,lat=point.y,res=res))
     return data
-    
-def df_project_on_grid(data : DataFrame, res : int = 11):
+
+
+@df_project_on_grid.register
+def _(data : DataFrame, res : int = 11) -> DataFrame:
     """ Project a pandas.DataFrame containing points coordinates on the H3 grid at a given resolution. 
 
     Parameters
@@ -97,7 +102,7 @@ def df_project_on_grid(data : DataFrame, res : int = 11):
     data["h3_id"] = data[["x","y"]].apply(lambda point: h3.latlng_to_cell(lng=point.loc["x"],lat=point.loc["y"],res=res),axis=1)
     return data
 
-def pt_project_on_grid(lat : float,lon : float, res : int = 11):
+def pt_project_on_grid(lat : float,lon : float, res : int = 11) -> DataFrame:
     """ Get H3 index of lat,lon coordinates for a resolution. Simple wrapper around the H3.latlng_to_cell function.
 
     """
@@ -131,8 +136,6 @@ def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "
     res = box(minx=xlim[0],maxx=xlim[1],miny=ylim[0],maxy=ylim[1])
 
     return res 
-
-
 
 # def centre_to_square(lat,lon,res,grid_param = 10_000):
     
@@ -172,7 +175,7 @@ def rast_to_h3_map(x : float = 0.0, y : float = 51.51, ref : str = "m", dist : f
 
     else:
         grid_params = [10,100,1000,5000,10000]
-        res_params = [13,12,11,10,8]
+        res_params = [14,12,11,10,8]
 
     # res_params
 

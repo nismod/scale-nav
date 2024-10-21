@@ -60,6 +60,7 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
                         height = band1.shape[0]
                         width = band1.shape[1]
                         cols, rows = meshgrid(arange(width), arange(height))
+                        
                         xs, ys = xy(transform = src.transform, rows=rows, cols=cols)
 
                         lons = array(xs)
@@ -73,7 +74,7 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
                                                 ,'lat': lats.flatten()})
                         
                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                        out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+                        # out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
 
                         writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
 

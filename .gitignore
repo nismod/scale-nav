@@ -6,3 +6,5 @@ outputs/
 *.Rproj
 .Rhistory
 .DS_Store
+build/
+dist/

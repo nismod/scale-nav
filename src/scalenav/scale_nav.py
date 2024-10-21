@@ -9,16 +9,18 @@ from scalenav.utils import res_upper_limit,res_lower_limit,child_num
 
 
 def set_scale(grid : [DataFrame,GeoDataFrame],final : int = 8) -> [DataFrame,GeoDataFrame] : # type: ignore
-    
     """Similarly to the change_scale function, but sets the resolution to a specific value."""
 
     if final>res_upper_limit or final<res_lower_limit:
         raise ValueError("Please provide an allowed resolution value")
     
     levels = final - h3.get_resolution(grid.h3_id.to_list()[0])
-    
+
     return change_scale(grid=grid,level=levels)
 
+# def set_scale(grid: str, final: int=8) -> str:
+#     print("redefined")
+#     return grid + "aaaa"
 
 def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,GeoDataFrame] : # type: ignore
   
@@ -26,12 +28,10 @@ def change_scale(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,
 
     Parameters
     ------------
-
     grid : a pandas.DataFrame or geopandas.GeoDataFrame that contains among others a column named `h3_id`. To signal columns that contain variable of interest, their name should end with the `_var` suffix.
     These variables will be assumed additibe and have their values rescaled depending on the transformation (up or down the scale). Every other column will see it's value broadcasted if the resolution increases or the first will be taken if the resolution decreases.
 
     level : a positive or integer value giving the relative scale change to perform. In other words, the final H3 resolution of the data will be equal to the resolution before change + level. The final resolution should be within {res_lower_limit}-{res_upper_limit}.
-
     """
 
     res = h3.get_resolution(grid.h3_id.to_list()[0])
