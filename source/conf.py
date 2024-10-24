@@ -15,10 +15,11 @@ author = 'Ivann Schlosser'
 
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.intersphinx',
-            #   'myst_parser',
+              # 'myst_parser',
               'sphinx.ext.napoleon',
             #   "nbsphinx",
-              'myst_nb',               
+              'myst_nb',         
+              'sphinx.ext.autosummary',
                ]
 
 templates_path = ['_templates']

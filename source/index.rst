@@ -9,7 +9,7 @@ scalenav
 A package for data manipulation using the H3 hierarchical indexed grid as base data schema.
 
 .. tip::
-   Refer to the H3 documentation for a better understanding of it's functionality. Or look into the docs of this package for our use case.
+   Refer to the H3 documentation for a better understanding of it's functionality. Or look into the guides of this package for our use case.
 
 
 .. toctree::
@@ -17,6 +17,7 @@ A package for data manipulation using the H3 hierarchical indexed grid as base d
    :maxdepth: 1
 
    startup
+   api
    
 
 .. toctree::
