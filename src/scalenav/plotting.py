@@ -4,9 +4,23 @@ from pandas import Series
 # from pypalettes import 
 
 def cmap(input : [Series,list], palette, log : bool = False) -> list[int]: # type: ignore
-    # input = []
-    # if type(input[0])==str:
-    #     input = [int(x) for x in input]
+    """Provide colormap for deckgl plotting.
+
+    Parameters
+    ----------
+
+    input : a list or pandas.Series of numeric values
+
+    palette : a palette from pypalettes.
+
+    log : whether the scale should be logarithmic
+
+    Returns
+    ---------
+
+    a list containting lists of length 3 with r,g,b values between 0 and 255 for each value from input. 
+    
+    """
 
     if log:
         input = nan_to_num(log1p(input)).tolist()

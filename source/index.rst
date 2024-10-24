@@ -11,7 +11,6 @@ A package for data manipulation using the H3 hierarchical indexed grid as base d
 .. tip::
    Refer to the H3 documentation for a better understanding of it's functionality. Or look into the guides of this package for our use case.
 
-
 .. toctree::
    :caption: Startup
    :maxdepth: 1
@@ -19,7 +18,6 @@ A package for data manipulation using the H3 hierarchical indexed grid as base d
    startup
    api
    
-
 .. toctree::
    :caption: Guides
    :titlesonly:

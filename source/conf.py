@@ -22,6 +22,8 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.autosummary',
                ]
 
+autosummary_generate = True
+
 templates_path = ['_templates']
 exclude_patterns = []
 
@@ -65,8 +67,10 @@ html_theme_options = {
     # "navigation_with_keys": False,
 }
 
-
-source_suffix = {'.md': 'markdown', '.rst': 'restructuredtext', '.ipynb': 'myst-nb'}
+source_suffix = {'.rst': 'restructuredtext',
+                 '.md': 'markdown',
+                 '.ipynb': 'myst-nb'}
+# myst-nb
 # source_suffix = [".md",".rst",".ipynb"]
 
 nb_execution_mode = "off" # "cache"   
