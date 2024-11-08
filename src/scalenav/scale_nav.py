@@ -34,13 +34,13 @@ def set_res(grid : [DataFrame,GeoDataFrame],final : int = 8) -> [DataFrame,GeoDa
 
 def change_res(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,GeoDataFrame] : # type: ignore
   
-    f"""Change scale of a data frame using the H3 hieararchical index.
-
+    f"""Change scale of a data frame using the H3 hieararchical index. Should any str containing column ( apart from osm_id ) be assumed as a factor ?
+    
     Parameters
     ------------
 
-    grid : a pandas.DataFrame or geopandas.GeoDataFrame that contains among others a column named `h3_id`. To signal columns that contain variable of interest, their name should end with the `_var` suffix.
-    These variables will be assumed additibe and have their values rescaled depending on the transformation (up or down the scale). Every other column will see it's value broadcasted if the resolution increases or the first will be taken if the resolution decreases.
+    grid : a pandas.DataFrame or geopandas.GeoDataFrame that contains among others a column named `h3_id`. To signal columns that contain variables of interest, their name should end with the `_var` suffix.
+    These variables will be assumed additive and have their values rescaled depending on the transformation (up or down the scale). Every other column will see it's value broadcasted if the resolution increases or the first will be taken if the resolution decreases.
 
     level : a positive or negative integer value giving the relative scale change to perform. In other words, the final H3 resolution of the data will be equal to the resolution before change + level. The final resolution should be within {res_lower_limit}-{res_upper_limit}.
 
@@ -59,6 +59,7 @@ def change_res(grid : [DataFrame,GeoDataFrame],level : int = 1) -> [DataFrame,Ge
     grid = grid.copy()
     
     p = compile("_var$")
+    # p_cat = compile("")
 
     var_columns = [x for x in grid.columns if search(p,x)]
     var_operations = {x:"sum" for x in var_columns}
