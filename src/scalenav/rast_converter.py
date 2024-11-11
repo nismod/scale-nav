@@ -18,6 +18,7 @@ from pyarrow import float32,float16,schema,field,uint16,table,Table
 from pyarrow.parquet import ParquetWriter
 from glob import glob
 from pyproj import Transformer
+from tqdm import tqdm
 
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
@@ -112,9 +113,10 @@ if __name__=="__main__":
                         description='Convert rasters to parquet files',
                         epilog='')
 
-      parser.add_argument('in_path',help="A path to a folder containing '.tif' files.")
-      parser.add_argument('out_path',nargs="?",default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
-      parser.add_argument('dst_crs',nargs="?",default='EPSG:4326',help="A crs value for the output.", type=str)
+      parser.add_argument('in_path',help="A path to a file or folder containing '.tif' files.")
+      parser.add_argument('out_path',nargs=1,default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
+      parser.add_argument('dst_crs',nargs=1,default='EPSG:4326',help="A crs value for the output.", type=str)
+      parser.add_argument('include_negative',nargs=1,default=False,help="Whether the data to process includes relevant negative or 0 values. Can have a significant impact on running time and output size.", type=str)
 
       # parser.add_argument('-v', '--verbose',
       #                     action='store_true') 
@@ -124,20 +126,18 @@ if __name__=="__main__":
       in_path = args["in_path"]
       out_path = args["out_path"]
       dst_crs = args["dst_crs"] # epsg:4326 by default.
+      include = args["include_negative"] # epsg:4326 by default.
+
 
       if not search(pattern=r".parquet$",string=out_path):
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
 
       vrt_options = {
-            # 'resampling': Resampling.cubic,
             'crs': dst_crs,
-            # 'transform': dst_transform,
-            # 'height': dst_height,
-            # 'width': dst_width,
       }
 
-      rast_schema = schema([('lon',float32())
-            ,('lat',float32())
+      rast_schema = schema([('lon',float16())
+            ,('lat',float16())
             ,('band_var',float32())
             ])
       rast_schema.with_metadata({
@@ -176,7 +176,7 @@ if __name__=="__main__":
                         
                         win_transfrom = vrt.window_transform
 
-                        for _, window in vrt.block_windows():
+                        for _, window in tqdm(vrt.block_windows()):
 
                               band1 = vrt.read(window=window)
                               
@@ -197,7 +197,8 @@ if __name__=="__main__":
                                                       ,'lat': lats.flatten()})
                               
                               out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                              out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+                              if not include:
+                                    out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
 
                               if out.shape[0]!=0:
                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
