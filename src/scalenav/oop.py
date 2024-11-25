@@ -3,6 +3,10 @@ into methods associated to objects that have a defined structure and therefore a
 
 from pathlib import Path
 import os 
+from ibis import duckdb
+from ibis import table,to_sql
+import ibis as ib
+import re
 
 configs = {
     "size_lim" : "500MB"
@@ -65,3 +69,58 @@ geom_column = ["x","lon","lng","longitude","y","lat","ltd","latitude","geom","ge
 class DataLayer(Layer):
     def __init__(self) -> None:
         super().__init__()
+
+
+##########
+
+def sn_connect(interactive : bool = True):
+    """Create a duckDB connection with spatial and H3 extensions loaded.
+    """
+    
+    ib.options.interactive = interactive
+    
+    conn = duckdb.connect()
+    
+    conn.raw_sql("""
+        INSTALL spatial; 
+        LOAD spatial;
+        INSTALL h3 FROM community;
+        LOAD h3;
+    """)
+    
+    return conn
+
+def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) -> ib.Table: # type: ignore
+    """Given an ibis table with coordinates columns, 
+    return a table with a new column resulting from generating h3 ids for the points at given parameter h3 resolution.
+    """
+
+    if columns is None:
+        col_x = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)")]
+        col_y = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)")]
+
+        if len(col_x)>1 or len(col_y)>1:
+            raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
+        
+        col_x=col_x[0]
+        col_y=col_y[0]
+
+        print(f"Assuming coordinates columns ('{col_x}','{col_y}')")
+        
+    elif type(columns) is tuple and type(columns[0]) is str and type(columns[1]) is str: 
+        col_x=columns[0]
+        col_x=columns[1]
+        print(f"Using coordinates columns ('{col_x}','{col_y}')")
+
+    elif type(columns) is tuple and type(columns[0]) is int and type(columns[1]) is int:
+        col_x = input.columns[columns[0]]
+        col_y = input.columns[columns[1]]
+        print(f"Using coordinates columns ('{col_x}','{col_y}')")
+
+    else :
+        raise ValueError("Could not recognise coordinates columns")
+
+    if "h3_id" in input.columns:
+        print("Existing h3_id column will be overwritten")
+
+    return input.alias("b").sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from b;""")

@@ -113,3 +113,12 @@ def add_geom(grid : [DataFrame,GeoDataFrame],crs="EPSG:4326") -> GeoDataFrame: #
     """
     grid["geom"] = GeoSeries(grid.h3_id.apply(lambda x: h3.cells_to_h3shape([x]))) 
     return GeoDataFrame(grid,geometry="geom",crs=crs)
+
+
+def h3_add_centr(input):
+    """Add centroid coordinates of h3 cell to table. Useful for further spatial operations."""
+    return input.alias("t_dens").sql("""
+Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+    FROM
+        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) AS h3_geom;""")
+

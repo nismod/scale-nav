@@ -15,7 +15,7 @@ from scalenav.utils import earth_radius_meters,A,alpha
 from functools import singledispatch
 
 def rast_to_centroid(out_path : str, in_paths : list[str]):
-    """
+    """DEPRECATED
     Convert a bunch of raster files given by their file location in a list into a single geospatial file containing the centroids of cells.
     If the out_path exists, then simply read it. 
     This is kind of deprecated and replaced by the command line tool and higher performance function using pyArrow.
@@ -219,9 +219,15 @@ rast_to_h3 = rast_to_h3_map(x = 0, y = 0)
 
 
 def centre_cell_to_square(h3_cell : str, neighbs : list[tuple[int]]) -> list[str]:
-
     """If a centroid h3 index is known, return the square cover for a cell and grid_param"""
 
+    sql = """SQL
+    
+    select *, array_value h3_gridded
+
+    h3_local_ij_to_cell(h3_id,neighbs[:][0],neighbs[:][1])
+
+    """
     ref_cell_ij = h3.cell_to_local_ij(origin=h3_cell,h=h3_cell)
 
     return [h3.local_ij_to_cell(origin=h3_cell,i=cell_i+ref_cell_ij[0],j=cell_j+ref_cell_ij[1]) for (cell_i,cell_j) in neighbs]

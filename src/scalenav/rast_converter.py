@@ -1,9 +1,8 @@
-"""Conversion of rasters into more user friendly tables. This module provides a command line tool and a function that both *ingests* a raster file and produce a 3 column parquet 
+"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce a 3 column parquet 
 table with coordinates and band value.
 
-See the data_ingestion notebook for templates of this. 
+See the data_ingestion notebook for templates of this.
 
-add clock using https://tqdm.github.io/docs/tqdm/
 """
 
 import argparse
@@ -19,6 +18,34 @@ from pyarrow.parquet import ParquetWriter
 from glob import glob
 from pyproj import Transformer
 from tqdm import tqdm
+
+
+def check_path(in_path):
+       """What are we checking ?
+       - input contains one of the desired file resolutions. 
+       - if folder file, extract all raster format files from it.
+       - if specific file, then just use that. 
+       - some robustness to user input should be embedded here. For example when providing folder path: '/the/folder/with/rast/' and /the/folder/with/rast' as two potential accepted values.
+       - also relative and absolute paths.
+
+       """
+
+       if in_path[len(in_path)-1]!= '/':
+              in_path=in_path+'/'
+    
+       in_paths = [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+
+       print("Reading in from",len(in_paths), "files.")
+       
+       return in_paths
+
+def rast_convert_core(src):
+       """ The core of the rast conversion can be put here 
+       in order to centralise the most efficient workflow 
+       that can be then used in the CL tool and function.
+       """
+       pass
+
 
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
@@ -53,8 +80,11 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
             "lat" : "Latitude coordinate",
             "band_var" : "Value associated",
                               })
-
-        in_paths = [x for x in glob(in_path, recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+        
+        if in_path[len(in_path)-1]!= '/':
+                in_path=in_path+'/'
+    
+        in_paths = [x for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
 
         if len(in_paths)==0: 
             raise IOError("No input files recognised.")
@@ -102,9 +132,9 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
                         
                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
                         out.drop(index=out.loc[out.band_var==0].index,inplace=True)
-                        
-                  if out.shape[0]!=0:
-                              writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
+                              
+                        if out.shape[0]!=0:
+                                    writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
       
 if __name__=="__main__":
       
@@ -113,21 +143,48 @@ if __name__=="__main__":
                         description='Convert rasters to parquet files',
                         epilog='')
 
-      parser.add_argument('in_path',help="A path to a file or folder containing '.tif' files.")
-      parser.add_argument('out_path',nargs=1,default='rast_convert.parquet',help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s")
-      parser.add_argument('dst_crs',nargs=1,default='EPSG:4326',help="A crs value for the output.", type=str)
-      parser.add_argument('include_negative',nargs=1,default=False,help="Whether the data to process includes relevant negative or 0 values. Can have a significant impact on running time and output size.", type=str)
-
+      parser.add_argument('in_path',
+                          nargs=1,
+                          help="A path to a file or folder with rasters.",
+                          type=str,
+                          )
+      
+      parser.add_argument('out_path',
+                          nargs=1,
+                          default='rast_convert.parquet',
+                          help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s",
+                          type=str,
+                          )
+      
+      parser.add_argument('--out_crs',
+                          "-ocrs",
+                          nargs=1,
+                          required=False,
+                          default='EPSG:4326',
+                          help="A crs value for the output.",
+                          type=str
+                          )
+      
+      parser.add_argument('--include_negative',
+                          "-in",
+                          nargs=1,
+                          required=False,
+                          default=False,
+                          help="Whether the data to process includes relevant negative or 0 values. Can have a significant impact on running time and output size.",
+                          type=bool
+                          )
+      
       # parser.add_argument('-v', '--verbose',
       #                     action='store_true') 
 
       args = vars(parser.parse_args())
 
-      in_path = args["in_path"]
-      out_path = args["out_path"]
-      dst_crs = args["dst_crs"] # epsg:4326 by default.
-      include = args["include_negative"] # epsg:4326 by default.
+      in_path = args["in_path"][0]
+      out_path = args["out_path"][0]
+      dst_crs = args["out_crs"] # epsg:4326 by default.
+      include = args["include_negative"] # exclude non positive values by default
 
+      # print(args)
 
       if not search(pattern=r".parquet$",string=out_path):
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
@@ -146,59 +203,68 @@ if __name__=="__main__":
             "band_var" : "Value associated",
                               })
 
-      in_paths = [x for x in glob(in_path, recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+
+      if in_path[len(in_path)-1]!= '/':
+                in_path=in_path+'/'
+    
+      in_paths = [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+
+      print("Reading in from ",len(in_paths), " files.")
+
+      # in_paths = check_paths(in_path)
 
       if len(in_paths)==0: 
             raise IOError("No input files recognised.")
 
-      print("Reading the following file(s): ",*in_paths)
-
+      # add clock using https://tqdm.github.io/docs/tqdm/
+      
       with ParquetWriter(out_path, rast_schema) as writer:
-            with open(in_path) as src:
+            for path in in_paths:
+                  with open(path) as src:
 
-                  src_crs = src.crs
+                        src_crs = src.crs
 
-                  if len(src.nodatavals)>1:
-                        nodata = src.nodatavals[0]
-                  else :
-                        nodata = src.nodatavals
+                        if len(src.nodatavals)>1:
+                              nodata = src.nodatavals[0]
+                        else :
+                              nodata = src.nodatavals
 
-                  print("No data value : ", nodata)
-                  print("Detected source crs : ", src_crs)
+                        print("No data value : ", nodata)
+                        print("Detected source crs : ", src_crs)
 
-                  with WarpedVRT(src, **vrt_options) as vrt:
-                        
-                        # At this point 'vrt' is a full dataset with dimensions,
-                        # CRS, and spatial extent matching 'vrt_options'.
-                        # Read all data into memory.
-                        # data = vrt.read()
-                        # Process the dataset in chunks.  Likely not very efficient.
-                        
-                        win_transfrom = vrt.window_transform
-
-                        for _, window in tqdm(vrt.block_windows()):
-
-                              band1 = vrt.read(window=window)
+                        with WarpedVRT(src, **vrt_options) as vrt:
                               
-                              height = band1.shape[1]
-                              width = band1.shape[2]
-                              cols, rows = meshgrid(arange(width), arange(height))
-
-                              xs, ys = xy(
-                                    transform = win_transfrom(window),
-                                    rows=rows,
-                                    cols=cols)
-
-                              lons = array(xs)
-                              lats = array(ys)
+                              # At this point 'vrt' is a full dataset with dimensions,
+                              # CRS, and spatial extent matching 'vrt_options'.
+                              # Process the dataset in chunks.  Likely not very efficient.
                               
-                              out = DataFrame({"band_var" : array(band1).flatten()
-                                                      ,'lon': lons.flatten()
-                                                      ,'lat': lats.flatten()})
-                              
-                              out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                              if not include:
-                                    out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+                              win_transfrom = vrt.window_transform
 
-                              if out.shape[0]!=0:
-                                    writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
+                              for _, window in tqdm(vrt.block_windows()):
+
+                                    band1 = vrt.read(window=window)
+                                    
+                                    height = band1.shape[1]
+                                    width = band1.shape[2]
+                                    cols, rows = meshgrid(arange(width), arange(height))
+
+                                    xs, ys = xy(
+                                          transform = win_transfrom(window),
+                                          rows=rows,
+                                          cols=cols)
+
+                                    lons = array(xs)
+                                    lats = array(ys)
+                                    
+                                    out = DataFrame({"band_var" : array(band1).flatten()
+                                                            ,'lon': lons.flatten()
+                                                            ,'lat': lats.flatten()})
+                                    
+                                    out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+                                    out.dropna(inplace=True)
+
+                                    if not include:
+                                          out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+
+                                    if out.shape[0]!=0:
+                                          writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
