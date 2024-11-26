@@ -1,6 +1,5 @@
 # Navigating spatial scales
 
-
 ![GitHub Actions Workflow
 Status](https://img.shields.io/github/actions/workflow/status/nismod/scale-nav/run-package.yml?style=flat)
 ![PyPI -

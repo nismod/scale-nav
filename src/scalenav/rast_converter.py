@@ -2,12 +2,11 @@
 table with coordinates and band value.
 
 See the data_ingestion notebook for templates of this.
-
 """
 
 import argparse
 from os.path import exists
-from numpy import meshgrid,arange,array
+from numpy import meshgrid,arange,array,nan
 from rasterio.transform import xy
 from rasterio import open
 from rasterio.vrt import WarpedVRT
@@ -18,7 +17,6 @@ from pyarrow.parquet import ParquetWriter
 from glob import glob
 from pyproj import Transformer
 from tqdm import tqdm
-
 
 def check_path(in_path):
        """What are we checking ?
@@ -35,16 +33,54 @@ def check_path(in_path):
     
        in_paths = [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
 
-       print("Reading in from",len(in_paths), "files.")
+      #  print("Reading in from",len(in_paths), "files.")
        
        return in_paths
 
-def rast_convert_core(src):
-       """ The core of the rast conversion can be put here 
+def check_nodata(source):
+      """
+      """
+      if len(source.nodatavals)>1: 
+            print("Using first no data value")
+            return source.nodatavals[0]
+      else : 
+            return source.nodatavals[0]
+      # return source.nodatavals
+
+def check_crs(source): 
+      """
+      """
+      return source.crs if source.crs is not None else "epsg:4326"
+
+def rast_convert_core(band, transform, win = None):
+      """ The core of the rast conversion can be put here 
        in order to centralise the most efficient workflow 
        that can be then used in the CL tool and function.
-       """
-       pass
+      """
+
+      height = band.shape[1]
+      width = band.shape[2]
+      cols, rows = meshgrid(arange(width), arange(height))
+
+      if win is not None:
+            xs, ys = xy(
+            transform = transform(win),
+            rows=rows,
+            cols=cols)
+      else :
+            xs, ys = xy(
+            transform = transform,
+            rows=rows,
+            cols=cols)
+
+      lons = array(xs)
+      lats = array(ys)
+
+      out = DataFrame({"band_var" : array(band).flatten()
+                        ,'lon': lons.flatten()
+                        ,'lat': lats.flatten()})
+
+      return out
 
 
 
@@ -81,10 +117,7 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
             "band_var" : "Value associated",
                               })
         
-        if in_path[len(in_path)-1]!= '/':
-                in_path=in_path+'/'
-    
-        in_paths = [x for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+        in_paths = check_path(in_path=in_path)
 
         if len(in_paths)==0: 
             raise IOError("No input files recognised.")
@@ -95,44 +128,30 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
             with open(in_path) as src:
                   
                   src_crs = src.crs
+                  print("Detected source crs : ", src_crs)
+
                   win_transfrom = src.window_transform
                   
-                  transformer = Transformer.from_crs(str(src_crs), 'EPSG:4326', always_xy=True)
+                  # transformer = Transformer.from_crs(str(src_crs), 'EPSG:4326', always_xy=True)
                   
-                  # print("No data : ", src.nodatavals)
+                  print("No data : ", src.nodatavals)
 
-                  if len(src.nodatavals)>1: 
-                        nodata = src.nodatavals[0]
-                  else : 
-                        nodata = src.nodatavals
 
                   print("No data value : ", nodata)
-                  print("Detected source crs : ", src_crs)
+                  
 
                   # Process the dataset in chunks.  Likely not very efficient.
                   for ij, window in src.block_windows():
 
                         band1 = src.read(window=window)
+                        out = rast_convert_core(band1,win_transfrom,window,nodata=nodata,include=False)
 
-                        height = band1.shape[1]
-                        width = band1.shape[2]
-                        cols, rows = meshgrid(arange(width), arange(height))
-
-                        xs, ys = xy(
-                              transform = win_transfrom(window),
-                              rows=rows,
-                              cols=cols)
-                        
-                        lons,lats = transformer.transform(array(xs),array(ys))
-                        
-                        out = DataFrame({'lon': lons.flatten(),
-                                                'lat': lats.flatten(),
-                                                "band_var" : array(band1[0,:,:]).flatten(),
-                                                })
-                        
                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                        out.drop(index=out.loc[out.band_var==0].index,inplace=True)
-                              
+                        out.dropna(inplace=True)
+
+                        if not include:
+                              out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+
                         if out.shape[0]!=0:
                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
       
@@ -244,22 +263,30 @@ if __name__=="__main__":
 
                                     band1 = vrt.read(window=window)
                                     
-                                    height = band1.shape[1]
-                                    width = band1.shape[2]
-                                    cols, rows = meshgrid(arange(width), arange(height))
+                                    # height = band1.shape[1]
+                                    # width = band1.shape[2]
+                                    # cols, rows = meshgrid(arange(width), arange(height))
 
-                                    xs, ys = xy(
-                                          transform = win_transfrom(window),
-                                          rows=rows,
-                                          cols=cols)
+                                    # xs, ys = xy(
+                                    #       transform = win_transfrom(window),
+                                    #       rows=rows,
+                                    #       cols=cols)
 
-                                    lons = array(xs)
-                                    lats = array(ys)
+                                    # lons = array(xs)
+                                    # lats = array(ys)
                                     
-                                    out = DataFrame({"band_var" : array(band1).flatten()
-                                                            ,'lon': lons.flatten()
-                                                            ,'lat': lats.flatten()})
+                                    # out = DataFrame({"band_var" : array(band1).flatten()
+                                    #                         ,'lon': lons.flatten()
+                                    #                         ,'lat': lats.flatten()})
                                     
+                                    # out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+                                    # out.dropna(inplace=True)
+
+                                    # if not include:
+                                    #       out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+
+                                    out = rast_convert_core(band=band1,transform=win_transfrom,win=window,nodata=nodata,include=include)
+
                                     out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
                                     out.dropna(inplace=True)
 

@@ -6,7 +6,7 @@ import h3
 from pandas import DataFrame
 from re import search,compile
 from scalenav.utils import res_upper_limit,res_lower_limit,child_num
-
+from ibis import Table
 
 def set_res(grid : [DataFrame,GeoDataFrame],final : int = 8) -> [DataFrame,GeoDataFrame] : # type: ignore
     """Similarly to the change_scale function, but sets the resolution to a specific value.
@@ -115,10 +115,12 @@ def add_geom(grid : [DataFrame,GeoDataFrame],crs="EPSG:4326") -> GeoDataFrame: #
     return GeoDataFrame(grid,geometry="geom",crs=crs)
 
 
-def h3_add_centr(input):
+def h3_add_centr(input : Table):
     """Add centroid coordinates of h3 cell to table. Useful for further spatial operations."""
-    return input.alias("t_dens").sql("""
-Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
-    FROM
-        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) AS h3_geom;""")
+    return (input
+            .alias("t_dens")
+            .sql("""
+                 Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom 
+                 FROM (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) 
+                 AS h3_geom;"""))
 
