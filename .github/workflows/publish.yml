@@ -1,9 +1,11 @@
 name: Publish Python 🐍 distribution 📦 to PyPI
 
-on: 
-  push:
-    tags:
-      - 'v*'
+on : push
+
+# on: 
+#   push:
+#     tags:
+#       - 'v*'
 
 # on:
 #   release:
