@@ -6,16 +6,20 @@ See the data_ingestion notebook for templates of this.
 
 import argparse
 from os.path import exists
+from re import search
+from glob import glob
 from numpy import meshgrid,arange,array,nan
+
+from pandas import DataFrame
+from pyproj import Transformer
+
 from rasterio.transform import xy
 from rasterio import open
 from rasterio.vrt import WarpedVRT
-from pandas import DataFrame
-from re import search
+
 from pyarrow import float32,float16,schema,field,uint16,table,Table
 from pyarrow.parquet import ParquetWriter
-from glob import glob
-from pyproj import Transformer
+
 from tqdm import tqdm
 
 def check_path(in_path):

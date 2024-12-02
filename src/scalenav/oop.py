@@ -1,7 +1,7 @@
 """Module sketching out the OO backbone. This is intended to reduce the complexity of the user facing side of the workflow by wrapping the underlying functions
 into methods associated to objects that have a defined structure and therefore are more failure robust."""
 
-from pathlib import Path
+# from pathlib import Path
 import os 
 from ibis import duckdb
 from ibis import table,to_sql
