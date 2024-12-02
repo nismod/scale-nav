@@ -13,7 +13,7 @@ def cmap(input : [Series,list], palette : (LinearSegmentedColormap | ListedColor
 
     input : a list or pandas.Series of numeric values
 
-    palette : a palette from matplotlib.colors or pypalettes.
+    palette : a palette from matplotlib.colors, pypalettes, or a palette name from https://python-graph-gallery.com/color-palette-finder/. 
 
     log : whether the scale should be logarithmic
 
