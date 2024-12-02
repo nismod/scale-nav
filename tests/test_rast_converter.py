@@ -2,7 +2,6 @@
 import ibis as ib
 # this will be a pytest workflow
 import pytest
-import numpy as np
 import rasterio
 from rasterio import open
 from rasterio.transform import from_origin
