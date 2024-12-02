@@ -1,19 +1,18 @@
 # test_rast_converter.py
-import ibis as ib
 # this will be a pytest workflow
 import pytest
+import numpy as np
+
 import rasterio
 from rasterio import open
 from rasterio.transform import from_origin
 from rasterio.crs import CRS
+
 from pandas import DataFrame
 
 from scalenav.rast_converter import rast_converter, rast_convert_core, check_nodata, check_crs, check_path
 
-import numpy as np
-import rasterio
-from rasterio.transform import from_origin
-from rasterio.crs import CRS
+
 
 # Directory to save rasters
 output_dir = "data"
