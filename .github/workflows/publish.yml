@@ -1,11 +1,11 @@
 name: Publish Python 🐍 distribution 📦 to PyPI
 
-on : push
+# on : push
 
-# on: 
-#   push:
-#     tags:
-#       - 'v*'
+on: 
+  push:
+    tags:
+      - 'v*'
 
 # on:
 #   release:
@@ -57,6 +57,9 @@ jobs:
         path: dist/
     - name: Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      with: 
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
 
 #   github-release:
 #     name: >-
