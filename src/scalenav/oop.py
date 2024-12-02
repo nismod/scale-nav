@@ -7,6 +7,7 @@ from ibis import duckdb
 from ibis import table,to_sql
 import ibis as ib
 import re
+from numpy import random
 
 configs = {
     "size_lim" : "500MB"
@@ -95,6 +96,9 @@ def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) ->
     return a table with a new column resulting from generating h3 ids for the points at given parameter h3 resolution.
     """
 
+    alias_code = "".join([str(x) for x in random.randint(low=0,high=9,size=10)])
+    alias_name = f"h3_project_{alias_code}"
+
     if columns is None:
         col_x = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)")]
         col_y = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)")]
@@ -123,4 +127,4 @@ def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) ->
     if "h3_id" in input.columns:
         print("Existing h3_id column will be overwritten")
 
-    return input.alias("b").sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from b;""")
+    return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")

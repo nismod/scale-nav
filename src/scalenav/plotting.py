@@ -2,10 +2,10 @@
 from numpy import max,nan_to_num,log1p
 from pandas import Series
 from matplotlib.colors import LinearSegmentedColormap,ListedColormap
-
+from pypalettes import load_cmap
 # from pypalettes import 
 
-def cmap(input : [Series,list], palette : (LinearSegmentedColormap | ListedColormap), log : bool = False, pydeck : bool = True, factorize : bool = False) -> list[int]: # type: ignore
+def cmap(input : [Series,list], palette : (LinearSegmentedColormap | ListedColormap | str), log : bool = False, pydeck : bool = True, factorize : bool = False) -> list[int]: # type: ignore
     """Provide colormap for deckgl plotting.
 
     Parameters
@@ -31,6 +31,9 @@ def cmap(input : [Series,list], palette : (LinearSegmentedColormap | ListedColor
         input = nan_to_num(log1p(input)).tolist()
     else:
         input = nan_to_num(input).tolist()
+
+    if palette is str:
+        palette = load_cmap(palette)
 
     m = max(input)
     l = palette.N

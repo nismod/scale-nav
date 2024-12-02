@@ -26,9 +26,10 @@ dependencies = [
 
 requires-python = ">=3.8"
 classifiers = [
-    "Programming Language :: Python :: 3 :: 9",
-    "Programming Language :: Python :: 3 :: 10",
-    "Programming Language :: Python :: 3 :: 11",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
@@ -38,6 +39,7 @@ keywords = ['hierarchical index','rescaling','geospatial']
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"
 Issues = "https://github.com/nismod/scale-nav/issues"
+Documentation = "https://nismod.github.io/scale-nav/"
 
 [tool.flit.external-data]
 directory = "data"
