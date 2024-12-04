@@ -97,14 +97,13 @@ def _(data : DataFrame, res : int = 11) -> DataFrame:
     Return
     ----------
     The original data frame with a new column called h3_id ccontaining the H3 code for each geometry. 
-
     """
+
     data["h3_id"] = data[["x","y"]].apply(lambda point: h3.latlng_to_cell(lng=point.loc["x"],lat=point.loc["y"],res=res),axis=1)
     return data
 
 def pt_project_on_grid(lat : float,lon : float, res : int = 11) -> DataFrame:
     """ Get H3 index of lat,lon coordinates for a resolution. Simple wrapper around the H3.latlng_to_cell function.
-
     """
     return h3.latlng_to_cell(lng=lon,lat=lat,res=res)
 
@@ -112,7 +111,6 @@ def pt_project_on_grid(lat : float,lon : float, res : int = 11) -> DataFrame:
 def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "arc") -> Polygon:
     """ Make a square box with side size given in the distance parameter centered on the (lon,lat) point. 
     The distance is expected to be in meters. The coordinates in degrees according to WGS:84. 
-    
     """
     half_distance = distance/2
 
@@ -214,27 +212,23 @@ def rast_to_h3_map(x : float = 0.0, y : float = 51.51, ref : str = "m", dist : f
 
     return rast_to_h3
 
-
 rast_to_h3 = rast_to_h3_map(x = 0, y = 0)
-
 
 def centre_cell_to_square(h3_cell : str, neighbs : list[tuple[int]]) -> list[str]:
     """If a centroid h3 index is known, return the square cover for a cell and grid_param"""
 
     sql = """SQL
-    
     select *, array_value h3_gridded
-
     h3_local_ij_to_cell(h3_id,neighbs[:][0],neighbs[:][1])
-
     """
+
     ref_cell_ij = h3.cell_to_local_ij(origin=h3_cell,h=h3_cell)
 
     return [h3.local_ij_to_cell(origin=h3_cell,i=cell_i+ref_cell_ij[0],j=cell_j+ref_cell_ij[1]) for (cell_i,cell_j) in neighbs]
 
-
 def layer_constrain(layer : [DataFrame,GeoDataFrame], constraint : [DataFrame,Series]):
-    """Apply a constraint to a layer. Remove the constrained cells from the layer and renormalise the values."""
+    """ Apply a constraint to a layer. Remove the constrained cells from the layer and renormalize the values.
+    """
     return layer
 
 

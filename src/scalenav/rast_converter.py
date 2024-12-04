@@ -5,7 +5,7 @@ See the data_ingestion notebook for templates of this.
 """
 
 import argparse
-from os.path import exists
+from os.path import exists,isdir,isfile
 from re import search
 from glob import glob
 from numpy import meshgrid,arange,array,nan
@@ -22,25 +22,31 @@ from pyarrow.parquet import ParquetWriter
 
 from tqdm import tqdm
 
-def check_path(in_path):
-       """What are we checking ?
-       - input contains one of the desired file resolutions. 
-       - if folder file, extract all raster format files from it.
-       - if specific file, then just use that. 
-       - some robustness to user input should be embedded here. For example when providing folder path: '/the/folder/with/rast/' and /the/folder/with/rast' as two potential accepted values.
-       - also relative and absolute paths.
+def check_path(in_path : [str,list]) :  # type: ignore
+      """What are we checking ?
+      UNDER DEV
+      - input contains one of the desired file resolutions. 
+      - if folder file, extract all raster format files from it.
+      - if specific file, then just use that. 
+      - some robustness to user input should be embedded here. For example when providing folder path: '/the/folder/with/rast/' and /the/folder/with/rast' as two potential accepted values.
+      - also relative and absolute paths.
 
-       """
+      """
+      #  check if parameter is directory, else treat it as endpoint to a tiff. 
+      # if it's a list, assume mix of folders and endpoints, therefore tranform it into a list of endpoints only.  
+      
+      if in_path is not str:
+            raise Warning("Provide single folder or file endpoint.")
+      
+      if isfile(in_path):
+            return in_path if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = in_path) else ""
 
-       if in_path[len(in_path)-1]!= '/':
-              in_path=in_path+'/'
-    
-       in_paths = [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+      if isdir(in_path):
+            if in_path[len(in_path)-1]!= '/':
+                  in_path=in_path + '/'
 
-      #  print("Reading in from",len(in_paths), "files.")
-       
-       return in_paths
-
+      return [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
+      
 def check_nodata(source):
       """
       """
@@ -56,22 +62,32 @@ def check_crs(source):
       """
       return source.crs if source.crs is not None else "epsg:4326"
 
-def rast_convert_core(band, transform, win = None):
+def rast_convert_core(src, transform, win = None):
       """ The core of the rast conversion can be put here 
        in order to centralise the most efficient workflow 
        that can be then used in the CL tool and function.
       """
 
-      height = band.shape[1]
-      width = band.shape[2]
-      cols, rows = meshgrid(arange(width), arange(height))
-
       if win is not None:
+            
+            band = src.read(window=win)
+
+            height = band.shape[1]
+            width = band.shape[2]
+            cols, rows = meshgrid(arange(width), arange(height))
+
             xs, ys = xy(
             transform = transform(win),
             rows=rows,
             cols=cols)
+
       else :
+            band = src.read()
+
+            height = band.shape[1]
+            width = band.shape[2]
+            cols, rows = meshgrid(arange(width), arange(height))
+
             xs, ys = xy(
             transform = transform,
             rows=rows,
@@ -147,8 +163,9 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
                   # Process the dataset in chunks.  Likely not very efficient.
                   for ij, window in src.block_windows():
 
-                        band1 = src.read(window=window)
-                        out = rast_convert_core(band1,win_transfrom,window,nodata=nodata,include=False)
+                        out = rast_convert_core(src,win_transfrom,window,
+                                                # nodata=nodata,include=False
+                                                )
 
                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
                         out.dropna(inplace=True)
@@ -179,6 +196,15 @@ if __name__=="__main__":
                           type=str,
                           )
       
+      parser.add_argument('--in_crs',
+                          "-icrs",
+                          nargs=1,
+                          required=False,
+                          default=None,
+                          help="A crs value for the input. Usually it is read from the metadata.",
+                          type=str
+                          )
+
       parser.add_argument('--out_crs',
                           "-ocrs",
                           nargs=1,
@@ -204,6 +230,7 @@ if __name__=="__main__":
 
       in_path = args["in_path"][0]
       out_path = args["out_path"][0]
+      in_crs = args["out_crs"]
       dst_crs = args["out_crs"] # epsg:4326 by default.
       include = args["include_negative"] # exclude non positive values by default
 
@@ -213,11 +240,12 @@ if __name__=="__main__":
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
 
       vrt_options = {
-            'crs': dst_crs,
+            #  "src_crs" : in_crs,
+            "crs" : dst_crs,
       }
 
-      rast_schema = schema([('lon',float16())
-            ,('lat',float16())
+      rast_schema = schema([('lon',float32())
+            ,('lat',float32())
             ,('band_var',float32())
             ])
       rast_schema.with_metadata({
@@ -265,31 +293,9 @@ if __name__=="__main__":
 
                               for _, window in tqdm(vrt.block_windows()):
 
-                                    band1 = vrt.read(window=window)
-                                    
-                                    # height = band1.shape[1]
-                                    # width = band1.shape[2]
-                                    # cols, rows = meshgrid(arange(width), arange(height))
-
-                                    # xs, ys = xy(
-                                    #       transform = win_transfrom(window),
-                                    #       rows=rows,
-                                    #       cols=cols)
-
-                                    # lons = array(xs)
-                                    # lats = array(ys)
-                                    
-                                    # out = DataFrame({"band_var" : array(band1).flatten()
-                                    #                         ,'lon': lons.flatten()
-                                    #                         ,'lat': lats.flatten()})
-                                    
-                                    # out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                                    # out.dropna(inplace=True)
-
-                                    # if not include:
-                                    #       out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
-
-                                    out = rast_convert_core(band=band1,transform=win_transfrom,win=window,nodata=nodata,include=include)
+                                    out = rast_convert_core(src=vrt,transform=win_transfrom,win=window,
+                                                            # nodata=nodata,include=include
+                                                            )
 
                                     out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
                                     out.dropna(inplace=True)

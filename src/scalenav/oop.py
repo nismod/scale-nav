@@ -4,7 +4,7 @@ into methods associated to objects that have a defined structure and therefore a
 # from pathlib import Path
 import os 
 from ibis import duckdb
-from ibis import table,to_sql
+from ibis import table,to_sql,_
 import ibis as ib
 import re
 from numpy import random
@@ -91,7 +91,7 @@ def sn_connect(interactive : bool = True):
     
     return conn
 
-def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) -> ib.Table: # type: ignore
+def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns, 
     return a table with a new column resulting from generating h3 ids for the points at given parameter h3 resolution.
     """
@@ -100,8 +100,8 @@ def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) ->
     alias_name = f"h3_project_{alias_code}"
 
     if columns is None:
-        col_x = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)")]
-        col_y = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)")]
+        col_x = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)]
+        col_y = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)]
 
         if len(col_x)>1 or len(col_y)>1:
             raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
@@ -128,3 +128,50 @@ def h3_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None) ->
         print("Existing h3_id column will be overwritten")
 
     return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
+
+
+def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
+    
+    # generate an alias to expose the tables in the back
+    code = "".join([str(x) for x in np.random.randint(0,9,10)])
+    alias_code = f"input_{code}"
+
+    try:
+        levels = int(levels)
+    except:
+        raise Warning("levels must be integer.")
+    
+    # need to be already projected.
+    if "h3_id" not in input.columns:
+        raise Warning("Project data into h3 first")
+    
+    res = input.alias(alias_code).sql(f"Select h3_get_resolution(h3_id) as h3_res from {alias_code} limit 1;")[0].as_scalar().execute()
+
+    if levels>0:
+        
+        rescale_factor = 7**(-levels)
+        # transformation expressions for navigating scales 
+        transform_expr = { x : ( _[x] * rescale_factor ) for x in input.columns if re.search(pattern="_var$",string=x)}
+    
+        return (
+            input
+            .alias(alias_code)
+            .sql(f"""Select *, h3_cell_to_children(h3_id,{res+levels}) as new_h3_id from {alias_code};""")
+            .unnest("new_h3_id")
+            .mutate(**transform_expr)
+            .drop("h3_id")
+            .rename(h3_id="new_h3_id")
+            )
+    
+    if levels<0:
+        
+        transform_expr_agg = { x : ( _[x].sum() ) for x in input.columns if re.search(pattern="_var$",string=x)}
+        
+        return (
+            input
+            .alias(alias_code)
+            .sql(f"""Select *, h3_cell_to_parent(h3_id,{res+levels}) as new_h3_id from {alias_code};""")
+            .group_by("new_h3_id")
+            .agg(**transform_expr_agg)
+            .rename(h3_id="new_h3_id")
+            )
