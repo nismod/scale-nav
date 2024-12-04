@@ -133,7 +133,7 @@ def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, fo
 def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
     
     # generate an alias to expose the tables in the back
-    code = "".join([str(x) for x in np.random.randint(0,9,10)])
+    code = "".join([str(x) for x in random.randint(0,9,10)])
     alias_code = f"input_{code}"
 
     try:
