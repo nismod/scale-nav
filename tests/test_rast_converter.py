@@ -123,8 +123,8 @@ def test_output_dim():
             transform = src.transform
             nodata = src.nodatavals
 
-            band1 = src.read()
-            out = rast_convert_core(band1,transform=transform)
+            # band1 = src.read()
+            out = rast_convert_core(src,transform=transform)
 
             assert out.shape==(32*32,3)
 

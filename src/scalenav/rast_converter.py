@@ -22,7 +22,7 @@ from pyarrow.parquet import ParquetWriter
 
 from tqdm import tqdm
 
-def check_path(in_path : [str,list]) :  # type: ignore
+def check_path(in_path : str) :
       """What are we checking ?
       UNDER DEV
       - input contains one of the desired file resolutions. 
@@ -32,11 +32,8 @@ def check_path(in_path : [str,list]) :  # type: ignore
       - also relative and absolute paths.
 
       """
-      #  check if parameter is directory, else treat it as endpoint to a tiff. 
+      # check if parameter is directory, else treat it as endpoint to a tiff. 
       # if it's a list, assume mix of folders and endpoints, therefore tranform it into a list of endpoints only.  
-      
-      if in_path is not str:
-            raise Warning("Provide single folder or file endpoint.")
       
       if isfile(in_path):
             return in_path if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = in_path) else ""
@@ -96,12 +93,9 @@ def rast_convert_core(src, transform, win = None):
       lons = array(xs)
       lats = array(ys)
 
-      out = DataFrame({"band_var" : array(band).flatten()
+      return DataFrame({"band_var" : array(band).flatten()
                         ,'lon': lons.flatten()
                         ,'lat': lats.flatten()})
-
-      return out
-
 
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
@@ -233,9 +227,7 @@ if __name__=="__main__":
       in_crs = args["out_crs"]
       dst_crs = args["out_crs"] # epsg:4326 by default.
       include = args["include_negative"] # exclude non positive values by default
-
-      # print(args)
-
+      
       if not search(pattern=r".parquet$",string=out_path):
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
 
