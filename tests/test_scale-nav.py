@@ -9,7 +9,9 @@ import pandas as pd
 import h3
 import scalenav.scale_nav as sn
 import scalenav.data as sd
+import scalenav.oop as snoo
 import itertools as iter
+import ibis as ib
 
 ## size of table
 size = 10
@@ -52,3 +54,36 @@ def test_change_scale_xy():
     res = sn.change_res(res_h3,1)
 
     assert res["band_var"].to_list()==bench
+
+
+def test_scale_change_down():
+
+    conn = snoo.sn_connect()
+
+    test_start_res = 7
+    test_levels = [1,3]
+
+    h3_id = [h3.latlng_to_cell(y,x,res=test_start_res) for (x,y) in zip(x,y)]
+
+    resc_test = pd.DataFrame({"h3_id" : h3_id})
+    resc_test["vals_var"] = 7
+    
+    resc_test_back = conn.create_table("resc_test",resc_test)
+
+    for lev in test_levels:
+
+        res_pd = sn.change_res(resc_test,lev)
+        # generating the data set with the new
+        res_ib = snoo.sn_change_res(resc_test_back,lev)
+
+        res_df_down = res_ib.execute()
+
+        assert np.all(res_df_down.vals_var==res_pd.vals_var)
+        assert res_df_down.shape[0]==res_pd.shape[0]
+        assert len(np.intersect1d(res_df_down.h3_id,res_pd.h3_id))==res_df_down.shape[0]
+
+        res_df_up = snoo.sn_change_res(res_ib,levels=-lev).execute()
+
+        assert np.all(np.float32(res_df_up.vals_var)==np.float32(resc_test.vals_var))
+        assert res_df_up.shape[0]==resc_test.shape[0]
+        assert len(np.intersect1d(res_df_up.h3_id,resc_test.h3_id))==res_df_up.shape[0]
