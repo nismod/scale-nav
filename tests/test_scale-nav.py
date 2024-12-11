@@ -53,7 +53,7 @@ def test_change_scale_xy():
 
     res = sn.change_res(res_h3,1)
 
-    assert res["band_var"].to_list()==bench
+    assert res["band_var"].to_list()==bench, ""
 
 
 def test_scale_change_down():
@@ -78,12 +78,12 @@ def test_scale_change_down():
 
         res_df_down = res_ib.execute()
 
-        assert np.all(res_df_down.vals_var==res_pd.vals_var)
-        assert res_df_down.shape[0]==res_pd.shape[0]
-        assert len(np.intersect1d(res_df_down.h3_id,res_pd.h3_id))==res_df_down.shape[0]
+        assert np.all(res_df_down.vals_var==res_pd.vals_var), ""
+        assert res_df_down.shape[0]==res_pd.shape[0],  ""
+        assert len(np.intersect1d(res_df_down.h3_id,res_pd.h3_id))==res_df_down.shape[0], ""
 
         res_df_up = snoo.sn_change_res(res_ib,levels=-lev).execute()
 
-        assert np.all(np.float32(res_df_up.vals_var)==np.float32(resc_test.vals_var))
-        assert res_df_up.shape[0]==resc_test.shape[0]
-        assert len(np.intersect1d(res_df_up.h3_id,resc_test.h3_id))==res_df_up.shape[0]
+        assert np.all(np.float32(res_df_up.vals_var)==np.float32(resc_test.vals_var)), ""
+        assert res_df_up.shape[0]==resc_test.shape[0], ""
+        assert len(np.intersect1d(res_df_up.h3_id,resc_test.h3_id))==res_df_up.shape[0], ""

@@ -8,7 +8,7 @@ import argparse
 from os.path import exists,isdir,isfile
 from re import search
 from glob import glob
-from numpy import meshgrid,arange,array,nan
+from numpy import meshgrid,arange,array,nan,dtype
 
 from pandas import DataFrame
 from pyproj import Transformer
@@ -16,8 +16,10 @@ from pyproj import Transformer
 from rasterio.transform import xy
 from rasterio import open
 from rasterio.vrt import WarpedVRT
+from rasterio.io import DatasetReader
+from rasterio.crs import CRS
 
-from pyarrow import float32,float16,schema,field,uint16,table,Table
+from pyarrow import float32,float16,schema,field,uint16,table,Table,from_numpy_dtype
 from pyarrow.parquet import ParquetWriter
 
 from tqdm import tqdm
@@ -30,7 +32,6 @@ def check_path(in_path : str) :
       - if specific file, then just use that. 
       - some robustness to user input should be embedded here. For example when providing folder path: '/the/folder/with/rast/' and /the/folder/with/rast' as two potential accepted values.
       - also relative and absolute paths.
-
       """
       # check if parameter is directory, else treat it as endpoint to a tiff. 
       # if it's a list, assume mix of folders and endpoints, therefore tranform it into a list of endpoints only.  
@@ -44,20 +45,23 @@ def check_path(in_path : str) :
 
       return [str(x) for x in glob(in_path + "**", recursive=True) if search(pattern = r"(.ti[f]{1,2}$)|(.nc$)", string = x)]
       
-def check_nodata(source):
+def check_nodata(source : DatasetReader):
+      """NOT much to check actually
       """
-      """
-      if len(source.nodatavals)>1: 
-            print("Using first no data value")
-            return source.nodatavals[0]
-      else : 
-            return source.nodatavals[0]
-      # return source.nodatavals
+      return source.nodatavals[0]
 
-def check_crs(source): 
+def check_crs(source : DatasetReader): 
       """
       """
       return source.crs if source.crs is not None else "epsg:4326"
+
+def infer_dtype(source : DatasetReader):
+
+      np_dtype = source.dtypes[0]
+      try:
+            return from_numpy_dtype(dtype(np_dtype)) # the numpy function
+      except:
+            return float32()
 
 def rast_convert_core(src, transform, win = None):
       """ The core of the rast conversion can be put here 
@@ -96,6 +100,15 @@ def rast_convert_core(src, transform, win = None):
       return DataFrame({"band_var" : array(band).flatten()
                         ,'lon': lons.flatten()
                         ,'lat': lats.flatten()})
+
+
+#  checking inputs from the cl
+
+def check_out_crs(val):
+      try:
+            return CRS.from_string(val)
+      except:
+            return CRS.from_string("epsg:4326")
 
 
 def rast_converter(in_path, out_path="rast_convert.parquet"):
@@ -169,7 +182,8 @@ def rast_converter(in_path, out_path="rast_convert.parquet"):
 
                         if out.shape[0]!=0:
                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
-      
+
+
 if __name__=="__main__":
       
       parser = argparse.ArgumentParser(
@@ -222,8 +236,8 @@ if __name__=="__main__":
 
       args = vars(parser.parse_args())
 
-      in_path = args["in_path"][0]
-      out_path = args["out_path"][0]
+      in_path = args["in_path"]
+      out_path = args["out_path"]
       in_crs = args["out_crs"]
       dst_crs = args["out_crs"] # epsg:4326 by default.
       include = args["include_negative"] # exclude non positive values by default
@@ -240,6 +254,7 @@ if __name__=="__main__":
             ,('lat',float32())
             ,('band_var',float32())
             ])
+      
       rast_schema.with_metadata({
             "lon" : "Longitude coordinate",
             "lat" : "Latitude coordinate",
@@ -264,17 +279,12 @@ if __name__=="__main__":
       with ParquetWriter(out_path, rast_schema) as writer:
             for path in in_paths:
                   with open(path) as src:
+                        # check the source and get the needed info once for user down the road. 
+                        src_crs = check_crs(src)
+                        print("Input CRS : ", src_crs)
 
-                        src_crs = src.crs
-
-                        if len(src.nodatavals)>1:
-                              nodata = src.nodatavals[0]
-                        else :
-                              nodata = src.nodatavals
-
+                        nodata = check_nodata(src)
                         print("No data value : ", nodata)
-                        print("Detected source crs : ", src_crs)
-
                         with WarpedVRT(src, **vrt_options) as vrt:
                               
                               # At this point 'vrt' is a full dataset with dimensions,

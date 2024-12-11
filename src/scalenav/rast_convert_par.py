@@ -18,7 +18,7 @@ import concurrent.futures
 from pyarrow import float32,schema,Table
 from pyarrow.parquet import ParquetWriter
 
-from scalenav.rast_converter import rast_convert_core,check_crs,check_nodata,check_path
+from scalenav.rast_converter import rast_convert_core,check_crs,check_nodata,check_path,infer_dtype,check_out_crs
 
 import argparse
 
@@ -27,25 +27,6 @@ import argparse
 #### input and output options
 
 dst_crs = CRS.from_epsg(4326)
-
-vrt_options = {
-    # 'resampling': Resampling.cubic,
-    'crs': dst_crs,
-    # 'transform': dst_transform,
-    # 'height': dst_height,
-    # 'width': dst_width,
-}
-
-rast_schema = schema([('lon',float32())
-                    ,('lat',float32())
-                    ,('band_var',float32())
-                    ])
-
-rast_schema.with_metadata({
-        "lon" : "Longitude coordinate",
-        "lat" : "Latitude coordinate",
-        "band_var" : "Value associated",
-                            })
 
 ##### Process 
 
@@ -88,33 +69,42 @@ if __name__=="__main__":
 
       parser = argparse.ArgumentParser(
                         prog='Rast Converter',
-                        description='Convert rasters to parquet files',
+                        description='Convert rasters to parquet files efficiently',
                         epilog='')
 
       parser.add_argument('in_path',
-                        #   nargs=1,
+                          nargs='?',
                           help="A path to a raster for processing.",
                           type=str,
                           )
       
       parser.add_argument('--out_path',
-                        #   nargs=1,
+                          '-o_p',
+                          nargs='?',
                           default='rast_convert_result',
+                          help="A folder to save into. Will be created or overwriten on execution. Default: %(default)s",
+                          type=str,
+                          )
+      
+      parser.add_argument('--out_crs',
+                          '-o_c',
+                          nargs='?',
+                          default="epsg:4326",
                           help="A folder to save into. Will be created or overwriten on execution. Default: %(default)s",
                           type=str,
                           )
       
       parser.add_argument('--workers',
                           '-w',
-                        #   nargs=1,
+                          nargs='?',
                           default=4,
                           help="The number of workers to run in parallel.",
                           type=int,
                           )
 
       parser.add_argument('--include_negative',
-                          "-in",
-                        #   nargs=1,
+                          '-i_n',
+                          nargs='?',
                           default=False,
                           help="Whether the data to process includes relevant negative or 0 values. Can have a significant impact on running time and output size.",
                           type=bool
@@ -123,11 +113,22 @@ if __name__=="__main__":
       args = vars(parser.parse_args())
 
       #### Process parameters 
-
       src_file = args["in_path"]
       out_fold = args["out_path"]
+      out_crs = args["out_crs"]
       num_workers = args["workers"]
       include = args["include_negative"] # exclude non positive values by default
+
+      out_crs = check_out_crs(out_crs)
+      print("Output CRS : ",str(out_crs))
+
+      vrt_options = {
+            # 'resampling': Resampling.cubic,
+            'crs': out_crs,
+            # 'transform': dst_transform,
+            # 'height': dst_height,
+            # 'width': dst_width,
+      }
 
       if not os.path.exists(out_fold):
             os.mkdir(out_fold)
@@ -135,22 +136,38 @@ if __name__=="__main__":
       out_files = [out_fold + "/" + out_fold + "_" + str(i) + ".parquet" for i in range(num_workers)]
 
       with open(src_file) as src:
+
             # check the source and get the needed info once for user down the road. 
             src_crs = check_crs(src)
-
-            print("Using CRS : ", src_crs)
+            print("Input CRS : ", src_crs)
 
             nodata = check_nodata(src)
-            
             print("No data value : ", nodata)
 
+            # windows
             windows = [window for _, window in WarpedVRT(src, **vrt_options).block_windows()]
 
+            # computing individual batch size for each core
             batch_size = int(np.ceil(len(windows)/(num_workers)))
-
             print("Batch size : ", batch_size)
-            
+            # dividing into batches
             batches = itertools.batched(windows,batch_size)
+            
+            # inferring the dtype
+            band_var_dtype = infer_dtype(src)
+            print("Variable type infered : ",band_var_dtype)
+
+            # making the raster with the information
+            rast_schema = schema([('lon',float32())
+                    ,('lat',float32())
+                    ,('band_var',band_var_dtype)
+                    ])
+
+            rast_schema.with_metadata({
+                  "lon" : "Longitude coordinate",
+                  "lat" : "Latitude coordinate",
+                  "band_var" : "Value associated",
+                                    })
 
       # We map the process() function over the list of
       # windows.

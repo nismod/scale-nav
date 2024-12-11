@@ -3,8 +3,7 @@ into methods associated to objects that have a defined structure and therefore a
 
 # from pathlib import Path
 import os 
-from ibis import duckdb
-from ibis import table,to_sql,_
+from ibis import table,to_sql,_,duckdb
 import ibis as ib
 import re
 from numpy import random
@@ -74,13 +73,13 @@ class DataLayer(Layer):
 
 ##########
 
-def sn_connect(interactive : bool = True):
+def sn_connect(interactive : bool = True, **kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     """
     
     ib.options.interactive = interactive
     
-    conn = duckdb.connect()
+    conn = duckdb.connect(**kwargs)
     
     conn.raw_sql("""
         INSTALL spatial; 
@@ -88,7 +87,7 @@ def sn_connect(interactive : bool = True):
         INSTALL h3 FROM community;
         LOAD h3;
     """)
-    
+
     return conn
 
 def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, for_gridding : bool = False) -> ib.Table: # type: ignore
