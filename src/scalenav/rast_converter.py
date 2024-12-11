@@ -110,144 +110,135 @@ def check_out_crs(val):
       except:
             return CRS.from_string("epsg:4326")
 
+# def rast_converter(in_path, out_path="rast_convert.parquet"):
+#         """Convert a rater file into a parquet table with at least 3 columns, 2 columns for the coordinates and the remaining for the value bands. The data is written into a external file.
+#         Also usable as a command line tool in which the function parameters are read from the console. 
 
-def rast_converter(in_path, out_path="rast_convert.parquet"):
-        """Convert a rater file into a parquet table with at least 3 columns, 2 columns for the coordinates and the remaining for the value bands. The data is written into a external file.
-        Also usable as a command line tool in which the function parameters are read from the console. 
+#         Future imporvements will include automatic recognition of the data epsg and grid cell size to add it into the metadata of the table.
 
-        Future imporvements will include automatic recognition of the data epsg and grid cell size to add it into the metadata of the table.
-
-        If working with large files of several thousand rows or columns, consider using the command line tool to process it. 
+#         If working with large files of several thousand rows or columns, consider using the command line tool to process it. 
       
-        Parameters
-        ------------
+#         Parameters
+#         ------------
 
-        in_path : the path to a folder containing the raster files to be converted. The function will look for files with a .tiff, .tif, .nc extensions. 
+#         in_path : the path to a folder containing the raster files to be converted. The function will look for files with a .tiff, .tif, .nc extensions. 
         
-        out_path : the path to a parquet file into which to write the data."""
+#         out_path : the path to a parquet file into which to write the data."""
         
-        if exists(out_path): return Exception("File exists. Erase first to rewrite.")    
+#         if exists(out_path): return Exception("File exists. Erase first to rewrite.")    
 
-        if not search(pattern=r".parquet$",string=out_path):
-                  #  raise ValueError("Provide a 'parquet' filename to write the outputs.")
-                  print("Output needs to be a parquet file. Adding parquet extension to provided 'out_path'.")
-                  out_path = out_path + ".parquet"
+#         if not search(pattern=r".parquet$",string=out_path):
+#                   #  raise ValueError("Provide a 'parquet' filename to write the outputs.")
+#                   print("Output needs to be a parquet file. Adding parquet extension to provided 'out_path'.")
+#                   out_path = out_path + ".parquet"
 
-        rast_schema = schema([('lon',float16())
-                        ,('lat',float16())
-                        ,('band_var',float32())
-                        ])
+#         rast_schema = schema([('lon',float16())
+#                         ,('lat',float16())
+#                         ,('band_var',float32())
+#                         ])
 
-        rast_schema.with_metadata({
-            "lon" : "Longitude coordinate",
-            "lat" : "Latitude coordinate",
-            "band_var" : "Value associated",
-                              })
+#         rast_schema.with_metadata({
+#             "lon" : "Longitude coordinate",
+#             "lat" : "Latitude coordinate",
+#             "band_var" : "Value associated",
+#                               })
         
-        in_paths = check_path(in_path=in_path)
+#         in_paths = check_path(in_path=in_path)
 
-        if len(in_paths)==0: 
-            raise IOError("No input files recognised.")
+#         if len(in_paths)==0: 
+#             raise IOError("No input files recognised.")
 
-        print("Reading the following file(s): ",*in_paths)
+#         print("Reading the following file(s): ",*in_paths)
 
-        with ParquetWriter(out_path, rast_schema) as writer:
-            with open(in_path) as src:
+#         with ParquetWriter(out_path, rast_schema) as writer:
+#             with open(in_path) as src:
                   
-                  src_crs = src.crs
-                  print("Detected source crs : ", src_crs)
+#                   src_crs = src.crs
+#                   print("Detected source crs : ", src_crs)
 
-                  win_transfrom = src.window_transform
+#                   win_transfrom = src.window_transform
                   
-                  # transformer = Transformer.from_crs(str(src_crs), 'EPSG:4326', always_xy=True)
+#                   # transformer = Transformer.from_crs(str(src_crs), 'EPSG:4326', always_xy=True)
                   
-                  print("No data : ", src.nodatavals)
+#                   print("No data : ", src.nodatavals)
 
 
-                  print("No data value : ", nodata)
+#                   print("No data value : ", nodata)
                   
 
-                  # Process the dataset in chunks.  Likely not very efficient.
-                  for ij, window in src.block_windows():
+#                   # Process the dataset in chunks.  Likely not very efficient.
+#                   for ij, window in src.block_windows():
 
-                        out = rast_convert_core(src,win_transfrom,window,
-                                                # nodata=nodata,include=False
-                                                )
+#                         out = rast_convert_core(src,win_transfrom,window,
+#                                                 # nodata=nodata,include=False
+#                                                 )
 
-                        out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-                        out.dropna(inplace=True)
+#                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+#                         out.dropna(inplace=True)
 
-                        if not include:
-                              out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
+#                         if not include:
+#                               out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
 
-                        if out.shape[0]!=0:
-                                    writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
-
+#                         if out.shape[0]!=0:
+#                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
 
 if __name__=="__main__":
       
       parser = argparse.ArgumentParser(
                         prog='Rast Converter',
-                        description='Convert rasters to parquet files',
+                        description='Convert rasters to parquet files efficiently',
                         epilog='')
 
       parser.add_argument('in_path',
-                          nargs=1,
+                          nargs="?",
                           help="A path to a file or folder with rasters.",
                           type=str,
                           )
       
-      parser.add_argument('out_path',
-                          nargs=1,
+      parser.add_argument('--out_path',
+                          '-o_p',
+                          nargs="?",
                           default='rast_convert.parquet',
                           help="A '.parquet' file to save into. Will be created or overwriten on execution. Default: %(default)s",
                           type=str,
                           )
-      
-      parser.add_argument('--in_crs',
-                          "-icrs",
-                          nargs=1,
-                          required=False,
-                          default=None,
-                          help="A crs value for the input. Usually it is read from the metadata.",
-                          type=str
-                          )
 
       parser.add_argument('--out_crs',
-                          "-ocrs",
-                          nargs=1,
-                          required=False,
-                          default='EPSG:4326',
-                          help="A crs value for the output.",
-                          type=str
+                          '-o_c',
+                          nargs='?',
+                          default="epsg:4326",
+                          help="A folder to save into. Will be created or overwriten on execution. Default: %(default)s",
+                          type=str,
                           )
       
       parser.add_argument('--include_negative',
-                          "-in",
-                          nargs=1,
-                          required=False,
+                          '-i_n',
+                          nargs='?',
                           default=False,
                           help="Whether the data to process includes relevant negative or 0 values. Can have a significant impact on running time and output size.",
                           type=bool
                           )
-      
-      # parser.add_argument('-v', '--verbose',
-      #                     action='store_true') 
 
       args = vars(parser.parse_args())
 
       in_path = args["in_path"]
       out_path = args["out_path"]
-      in_crs = args["out_crs"]
-      dst_crs = args["out_crs"] # epsg:4326 by default.
+      out_crs = args["out_crs"] # epsg:4326 by default.
       include = args["include_negative"] # exclude non positive values by default
       
       if not search(pattern=r".parquet$",string=out_path):
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
 
+ 
+      out_crs = check_out_crs(out_crs)
+      print("Output CRS : ",str(out_crs))
+
       vrt_options = {
-            #  "src_crs" : in_crs,
-            "crs" : dst_crs,
+            # 'resampling': Resampling.cubic,
+            'crs': out_crs,
+            # 'transform': dst_transform,
+            # 'height': dst_height,
+            # 'width': dst_width,
       }
 
       rast_schema = schema([('lon',float32())

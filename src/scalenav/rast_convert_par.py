@@ -94,14 +94,6 @@ if __name__=="__main__":
                           type=str,
                           )
       
-      parser.add_argument('--workers',
-                          '-w',
-                          nargs='?',
-                          default=4,
-                          help="The number of workers to run in parallel.",
-                          type=int,
-                          )
-
       parser.add_argument('--include_negative',
                           '-i_n',
                           nargs='?',
@@ -110,14 +102,22 @@ if __name__=="__main__":
                           type=bool
                           )
       
+      parser.add_argument('--workers',
+                          '-w',
+                          nargs='?',
+                          default=4,
+                          help="The number of workers to run in parallel.",
+                          type=int,
+                          )
+
       args = vars(parser.parse_args())
 
       #### Process parameters 
       src_file = args["in_path"]
       out_fold = args["out_path"]
       out_crs = args["out_crs"]
-      num_workers = args["workers"]
       include = args["include_negative"] # exclude non positive values by default
+      num_workers = args["workers"]
 
       out_crs = check_out_crs(out_crs)
       print("Output CRS : ",str(out_crs))
