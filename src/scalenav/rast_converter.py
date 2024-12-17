@@ -145,7 +145,7 @@ if __name__=="__main__":
                           type=bool
                           )
 
-      args = vars(parser.parse_args(args))
+      args = vars(parser.parse_args())
 
       in_path = args["in_path"]
       out_path = args["out_path"]
