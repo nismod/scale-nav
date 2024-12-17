@@ -10,7 +10,8 @@ from rasterio.crs import CRS
 
 from pandas import DataFrame
 
-from scalenav.rast_converter import rast_converter, rast_convert_core, check_nodata, check_crs, check_path
+from scalenav.rast_convert_par import process
+from scalenav.rast_converter import rast_convert_core, check_nodata, check_crs, check_path
 
 
 
@@ -82,7 +83,7 @@ def rast_ingest(tmp_path_factory: pytest.TempPathFactory):
     for i,file in enumerate(files):
         in_file = "data" / file
         out_file = tmp_path_factory+f"/test_data_{i}.parquet"
-        rast_converter(in_path=in_file,out_path=out_file)
+        process(src_file=in_file,out_file=out_file)
 
 # sample_file = f"../../data/test_data_{i}.parquet"
 
