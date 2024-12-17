@@ -101,89 +101,15 @@ def rast_convert_core(src, transform, win = None):
                         ,'lon': lons.flatten()
                         ,'lat': lats.flatten()})
 
-
 #  checking inputs from the cl
-
 def check_out_crs(val):
       try:
             return CRS.from_string(val)
       except:
             return CRS.from_string("epsg:4326")
 
-# def rast_converter(in_path, out_path="rast_convert.parquet"):
-#         """Convert a rater file into a parquet table with at least 3 columns, 2 columns for the coordinates and the remaining for the value bands. The data is written into a external file.
-#         Also usable as a command line tool in which the function parameters are read from the console. 
-
-#         Future imporvements will include automatic recognition of the data epsg and grid cell size to add it into the metadata of the table.
-
-#         If working with large files of several thousand rows or columns, consider using the command line tool to process it. 
       
-#         Parameters
-#         ------------
-
-#         in_path : the path to a folder containing the raster files to be converted. The function will look for files with a .tiff, .tif, .nc extensions. 
-        
-#         out_path : the path to a parquet file into which to write the data."""
-        
-#         if exists(out_path): return Exception("File exists. Erase first to rewrite.")    
-
-#         if not search(pattern=r".parquet$",string=out_path):
-#                   #  raise ValueError("Provide a 'parquet' filename to write the outputs.")
-#                   print("Output needs to be a parquet file. Adding parquet extension to provided 'out_path'.")
-#                   out_path = out_path + ".parquet"
-
-#         rast_schema = schema([('lon',float16())
-#                         ,('lat',float16())
-#                         ,('band_var',float32())
-#                         ])
-
-#         rast_schema.with_metadata({
-#             "lon" : "Longitude coordinate",
-#             "lat" : "Latitude coordinate",
-#             "band_var" : "Value associated",
-#                               })
-        
-#         in_paths = check_path(in_path=in_path)
-
-#         if len(in_paths)==0: 
-#             raise IOError("No input files recognised.")
-
-#         print("Reading the following file(s): ",*in_paths)
-
-#         with ParquetWriter(out_path, rast_schema) as writer:
-#             with open(in_path) as src:
-                  
-#                   src_crs = src.crs
-#                   print("Detected source crs : ", src_crs)
-
-#                   win_transfrom = src.window_transform
-                  
-#                   # transformer = Transformer.from_crs(str(src_crs), 'EPSG:4326', always_xy=True)
-                  
-#                   print("No data : ", src.nodatavals)
-
-
-#                   print("No data value : ", nodata)
-                  
-
-#                   # Process the dataset in chunks.  Likely not very efficient.
-#                   for ij, window in src.block_windows():
-
-#                         out = rast_convert_core(src,win_transfrom,window,
-#                                                 # nodata=nodata,include=False
-#                                                 )
-
-#                         out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
-#                         out.dropna(inplace=True)
-
-#                         if not include:
-#                               out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
-
-#                         if out.shape[0]!=0:
-#                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False,safe=True))
-
 if __name__=="__main__":
-      
       parser = argparse.ArgumentParser(
                         prog='Rast Converter',
                         description='Convert rasters to parquet files efficiently',
@@ -219,7 +145,7 @@ if __name__=="__main__":
                           type=bool
                           )
 
-      args = vars(parser.parse_args())
+      args = vars(parser.parse_args(args))
 
       in_path = args["in_path"]
       out_path = args["out_path"]

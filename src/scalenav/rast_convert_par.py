@@ -64,8 +64,9 @@ def process(
                                     writer.write_table(Table.from_pandas(df=out,schema = rast_schema,preserve_index=False))
 
 
-if __name__=="__main__":
+# if __name__=="__main__":
 
+def rast_converter(args=None):
 
       parser = argparse.ArgumentParser(
                         prog='Rast Converter',
@@ -110,7 +111,7 @@ if __name__=="__main__":
                           type=int,
                           )
 
-      args = vars(parser.parse_args())
+      args = vars(parser.parse_args(args))
 
       #### Process parameters 
       src_file = args["in_path"]
@@ -155,6 +156,7 @@ if __name__=="__main__":
             
             # inferring the dtype
             band_var_dtype = infer_dtype(src)
+
             print("Variable type infered : ",band_var_dtype)
 
             # making the raster with the information

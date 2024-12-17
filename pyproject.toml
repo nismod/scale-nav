@@ -3,7 +3,6 @@ requires = ["flit_core>=3.4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-
 name = "scalenav"
 version = "0.0.2"
 
@@ -13,8 +12,11 @@ authors = [
 maintainers = [
   { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },
 ]
+
 description = "A package to project all sorts of data on the H3 grid and manipulate it at different spatial scales."
+
 readme = "README.md"
+
 dependencies = [
     "numpy"
     ,"pandas"
@@ -40,6 +42,13 @@ keywords = ['hierarchical index','rescaling','geospatial']
 Homepage = "https://github.com/nismod/scale-nav"
 Issues = "https://github.com/nismod/scale-nav/issues"
 Documentation = "https://nismod.github.io/scale-nav/"
+
+[project.scripts]
+rastapar = "scalenav.rast_convert_par:rast_converter"
+
+[project.gui-scripts]
+rastapar = "scalenav.rast_convert_par:rast_converter"
+
 
 [tool.flit.external-data]
 directory = "data"

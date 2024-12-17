@@ -174,3 +174,15 @@ def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
             .agg(**transform_expr_agg)
             .rename(h3_id="new_h3_id")
             )
+
+
+def sn_add_centr(input : ib.Table):
+    # generate an alias to expose the tables in the back
+    code = "".join([str(x) for x in random.randint(0,9,10)])
+    alias_code = f"input_{code}"
+    return (input
+            .alias(alias_code)
+            .sql("""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+                    FROM
+                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) AS h3_geom;""")
+                    )
