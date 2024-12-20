@@ -4,12 +4,13 @@ into methods associated to objects that have a defined structure and therefore a
 # from pathlib import Path
 import os 
 from ibis import table,to_sql,_,duckdb
+import ibis.selectors as s
 import ibis as ib
 import re
 from numpy import random
 
 configs = {
-    "size_lim" : "500MB"
+    "memory_limit" : "500MB"
 }
 
 class ScalenavProcess:
@@ -73,7 +74,7 @@ class DataLayer(Layer):
 
 ##########
 
-def sn_connect(interactive : bool = True, **kwargs):
+def sn_connect(database = ':memory:',interactive : bool = True, **kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     """
     
@@ -125,12 +126,14 @@ def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, fo
 
     if "h3_id" in input.columns:
         print("Existing h3_id column will be overwritten")
+        input = input.drop("h3_id")
 
     return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
 
 
 def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
-    
+    """Projecting an H-indexed table through scales in the DuckDB backend."""
+
     # generate an alias to expose the tables in the back
     code = "".join([str(x) for x in random.randint(0,9,10)])
     alias_code = f"input_{code}"
@@ -160,7 +163,7 @@ def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
             .mutate(**transform_expr)
             .drop("h3_id")
             .rename(h3_id="new_h3_id")
-            )
+)
     
     if levels<0:
         
@@ -173,16 +176,35 @@ def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
             .group_by("new_h3_id")
             .agg(**transform_expr_agg)
             .rename(h3_id="new_h3_id")
-            )
+)
 
 
 def sn_add_centr(input : ib.Table):
+    """Add the centroid of a hex cell in the table expression."""
     # generate an alias to expose the tables in the back
     code = "".join([str(x) for x in random.randint(0,9,10)])
     alias_code = f"input_{code}"
+
     return (input
             .alias(alias_code)
-            .sql("""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+            .sql(f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
                     FROM
-                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) AS h3_geom;""")
-                    )
+                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});""")
+)
+
+
+def sn_reindex(input : ib.Table,names_from=None,values_from="id",values_agg="count",values_fill=0,) : 
+    """Transpose a variable containing categories associated to located data into an H3 
+    indexed table with new columns based on the categorical values. This performs a pivot."""
+    
+    names_from = input.select(s.of_type("string")).columns
+
+    return (input
+            .pivot_wider(
+                id_cols="h3_id",
+                names_from=names_from,
+                values_from=values_from,
+                values_agg=values_agg,
+                values_fill=values_fill,
+                )
+)

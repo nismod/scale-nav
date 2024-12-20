@@ -21,9 +21,7 @@ def cmap(input : [Series,list], palette : (LinearSegmentedColormap | ListedColor
     
     Returns
     ---------
-
     a list containting lists of length 3 with r,g,b values between 0 and 255 for each value from input. 
-    
     """
     #  if factorize: can be done outside of the function as well. Just provide a different color palette. 
 
