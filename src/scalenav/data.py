@@ -14,58 +14,6 @@ from scalenav.utils import earth_radius_meters,A,alpha
 # from overloading import overload
 from functools import singledispatch
 
-def rast_to_centroid(out_path : str, in_paths : list[str]):
-    """DEPRECATED
-    Convert a bunch of raster files given by their file location in a list into a single geospatial file containing the centroids of cells.
-    If the out_path exists, then simply read it. 
-    This is kind of deprecated and replaced by the command line tool and higher performance function using pyArrow.
-
-    Parameters
-    -----------
-    out_path : str, is a single path to a parquet file. 
-    
-    in_paths : list(str), is a list of paths to .tiff or .nc files.
-
-    Returns
-    ----------
-    a pandas.DataFrame with columns lon, lat and band.
-
-    """
-    if not search(pattern=".parquet$",string=out_path):
-        raise ValueError("Provide a filename with .parquet extension to write the outputs.")
-    
-    if exists(out_path):
-        print("Reading existing file")    
-        grid = read_file(out_path)
-
-    else:
-        grids = []
-        for path in in_paths:
-            with open(path) as src:
-                # src.re
-                band1 = src.read(1)
-                height = band1.shape[0]
-                width = band1.shape[1]
-                cols, rows = meshgrid(arange(width), arange(height))
-                xs, ys = xy(transform = src.transform, rows=rows, cols=cols)
-
-                lons = array(xs)
-                lats = array(ys)
-
-                out = DataFrame({"band_var" : array(band1).flatten()
-                                        ,'lon': lons.flatten()
-                                        ,'lat': lats.flatten()})
-                
-                out.drop(index=out.loc[out.band_var==src.nodatavals].index,inplace=True)
-                out.drop(index=out.loc[out.band_var<=0].index,inplace=True)
-                grids.append(out)
-
-        # concatenate all the data sets into 1, the columns match, and assign the geometry
-        grid = DataFrame(concat(grids))
-    
-        return grid
-    
-
 @singledispatch
 def df_project_on_grid(data : GeoDataFrame, res : int = 11) -> GeoDataFrame:
     """ Project a geopandas.GeoDataFrame containing points on the H3 grid at a given resolution. 
@@ -119,10 +67,10 @@ def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "
     dphi = half_distance/cos(lat_rad)/earth_radius_meters/pi*180
 
     if ref == "m":
-        print("Using angles for meter grid.")
+        # print("Using angles for meter grid.")
         dtheta = half_distance/earth_radius_meters/pi*180
     elif ref == "arc":
-        print("Using angles for arc grid.")
+        # print("Using angles for arc grid.")
         dtheta = half_distance/cos(lat_rad)/earth_radius_meters/pi*180
     else :
         raise Warning("Provide a valid ref parameter.")
@@ -134,29 +82,6 @@ def square_poly(lat : float, lon : float, distance : int = 10_000, ref : str = "
     res = box(minx=xlim[0],maxx=xlim[1],miny=ylim[0],maxy=ylim[1])
 
     return res 
-
-# def centre_to_square(lat,lon,res,grid_param = 10_000):
-    
-#     """If centroid coordinates are known, return the square cover for a h3 resolution and original grid_param."""
-
-#     h3_cell = h3.latlng_to_cell(lng=lon,lat=lat,res=res)
-
-#     ref_cell = h3.cell_to_local_ij(origin=h3_cell,h=h3_cell)
-
-#     (my_lat,my_lon) = h3.cell_to_latlng(h3_cell)
-
-#     geom = square_poly(lat = my_lat,lon = my_lon, distance=grid_param)
-
-#     neighbs = [h3.cell_to_local_ij(origin=h3_cell,h=cell) for cell in h3.geo_to_cells(geom,res=res)] 
-
-#     neighb_id= [(neighb[0]-ref_cell[0],neighb[1]-ref_cell[1]) for neighb in neighbs]
-
-#     # neighbs = [h3.local_ij_to_cell(origin=h3_cell,i=ref_cell[0]+id[0],j=ref_cell[1]+id[1]) for id in neighb_id]
-#     # neighbs
-#     # neighbs_geo = h3.cells_to_h3shape(neighbs)
-#     return neighbs
-# replace this direct computation of whatever number of cells exeeds 50
-
 
 def rast_to_h3_map(x : float = 0.0, y : float = 51.51, ref : str = "m", dist : float = 0):
     """Allows adding a custom distance value for unusual grid shapes and specify if the raster cells are in projected or arc sizes."""
@@ -194,6 +119,11 @@ def rast_to_h3_map(x : float = 0.0, y : float = 51.51, ref : str = "m", dist : f
     #     "10000" : {"h3_res" : 8,
     #                 "nn" : []},
     # }
+
+    if ref == "m":
+        print("Using angles for meter grid.")
+    elif ref == "arc":
+        print("Using angles for arc grid.")
 
     for grid in grid_params:
         # get the right h3 resolution for the grid param.
