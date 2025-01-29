@@ -157,7 +157,7 @@ def centre_cell_to_square(h3_cell : str, neighbs : list[tuple[int]]) -> list[str
     return [h3.local_ij_to_cell(origin=h3_cell,i=cell_i+ref_cell_ij[0],j=cell_j+ref_cell_ij[1]) for (cell_i,cell_j) in neighbs]
 
 def layer_constrain(layer : [DataFrame,GeoDataFrame], constraint : [DataFrame,Series]):
-    """ Apply a constraint to a layer. Remove the constrained cells from the layer and renormalize the values.
+    """ Apply a constraint to a layer. Remove the constrained cells from the layer and rescale the values.
     """
     return layer
 

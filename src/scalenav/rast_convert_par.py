@@ -179,7 +179,7 @@ def rast_converter(args=None):
             futures = []
             for (w,v,win) in zip(out_files,[src_file]*num_workers,batches):
                   futures.append(
-                        executor.submit(process,w,v,win,rast_schema,vrt_options,nodata)
+                        executor.submit(process,w,v,win,rast_schema,vrt_options,nodata,include)
                   )
             # Wait for all tasks to complete
             concurrent.futures.wait(futures)

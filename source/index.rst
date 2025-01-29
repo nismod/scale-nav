@@ -16,12 +16,27 @@ A package for data manipulation using the H3 hierarchical indexed grid as base d
    :maxdepth: 1
 
    startup
-   api
-   
+   api/index
+
+.. toctree::
+   :caption: CL tool
+   :titlesonly:
+   :maxdepth: 1
+   :glob:
+
+   notebook/rastapar_doc
+   notebook/data_ingestion
+
 .. toctree::
    :caption: Guides
    :titlesonly:
    :maxdepth: 1
    :glob:
 
-   notebook/*
+   notebook/data_layer
+   notebook/data_and_constraint_layer
+   notebook/data_and_proxy_layer
+   notebook/h3_duckdb
+   notebook/oop
+   notebook/rescaling_h3_basics
+   

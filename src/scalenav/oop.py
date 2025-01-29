@@ -7,7 +7,7 @@ from ibis import table,to_sql,_,duckdb
 import ibis.selectors as s
 import ibis as ib
 import re
-from numpy import random
+from numpy import random,all
 
 configs = {
     "memory_limit" : "500MB"
@@ -76,20 +76,32 @@ class DataLayer(Layer):
 
 def sn_connect(database = ':memory:',interactive : bool = True, **kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
+    This function will not create a db from a jupyter notebook. run it in a script or a terminal to perform this action.
     """
     
     ib.options.interactive = interactive
-    
-    conn = duckdb.connect(**kwargs)
-    
+
+    if database in ["memory", ':memory:', "mem"]:
+        print("Connecting to a temporary in-memory DB instance.")
+        conn = ib.duckdb.connect()
+    elif os.path.exists(database):
+        print("connecting to existing database.")
+        conn = ib.duckdb.connect(database)
+    else :
+        print("Creating database at'",database,"'.")
+        ib.duckdb.connect(database)
+        conn = ib.duckdb.connect(database,**kwargs)
+
     conn.raw_sql("""
         INSTALL spatial; 
         LOAD spatial;
         INSTALL h3 FROM community;
         LOAD h3;
-    """)
-
+                    """)
+    
     return conn
+
+        
 
 def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns, 
@@ -208,3 +220,55 @@ def sn_reindex(input : ib.Table,names_from=None,values_from="id",values_agg="cou
                 values_fill=values_fill,
                 )
 )
+
+
+def sn_rescale(input : ib.Table, weight : ib.Table,weight_var : [str] = "weight_var", weight_geom : str = "geometry", weight_id : str = "id", keep_left : [str] = None ,keep_right : [str] = None) -> ib.Table : 
+    """This function takes two layers, assuming the secong parameter contains the layer with data to downscale. Therefore the first layer is supposed to be spatially more granular.
+    It intersects them and rescales the values from the second layer by weighting according to the first layer."""
+
+    if "h3_id" in input.columns: 
+        input = sn_add_centr(input=input)
+        
+    if weight_geom not in weight.columns:
+        weight_geom = [x for x in input.select(s.of_type("GEOMETRY")).columns if re.search(string=x,pattern="geom")][0]
+        print("Assuming geometry column ",weight_geom)
+    
+    if weight_id not in weight.columns:
+        weight = weight.mutate(id = ib.row_number())
+
+    return (input
+     .join(
+         weight.select(weight_id,weight_var,weight_geom),
+         how="left",
+         predicates=input["geom"].intersects(weight[weight_geom]))
+     .select(~s.of_type("GEOMETRY"))
+     .mutate(
+        s.across(s.matches("_var$"),
+             _/_.sum().over(group_by=weight[weight_id]),
+             names="{col}_dens"))
+     .mutate(
+        s.across(s.matches("_dens$"),
+             _*weight[weight_var],
+             names="{col}_var"))
+     .select(~s.matches("_dens$"))
+)
+
+def sn_concat(input,**kwargs):
+    """Stack and regroup a set of layers into 1. Similar effect to concat in pandas.
+    """
+    if all(["h3_id" in tab.columns for tab in list(input.values())]):
+        return ib.union(*list(input.values()),**kwargs).group_by("h3_id").agg()
+    return ib.union(*list(input.values()),**kwargs)
+
+
+def sn_combine(conn, input : [ib.Table], name : str, overwrite : bool = False):
+    """Provide a dict with named tables, the keys will be reused to create variable names in the binded data. 
+    Similar effect to rbind in R.
+    """
+    id_col = ib.union(*[tab.select("h3_id") for tab in list(input.values())],distinct=True)
+    
+    for (nam,tab) in input.items():
+        tab = tab.rename({nam : "band_var"})
+        id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").rename({nam+"_var" : nam}).fill_null({nam+"_var" : 0})
+
+    return conn.create_table(obj=id_col.select(~s.c("h3_id_var")),name=name,overwrite=overwrite)
