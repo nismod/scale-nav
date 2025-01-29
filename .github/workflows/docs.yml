@@ -1,8 +1,13 @@
 name: docs
 
-on:
+# on:
+#   push:
+#     branches: ["main"]
+
+on: 
   push:
-    branches: ["main"]
+    tags:
+      - 'v*'
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
