@@ -8,6 +8,7 @@ import ibis.selectors as s
 import ibis as ib
 import re
 from numpy import random,all
+from duckdb import connect
 
 configs = {
     "memory_limit" : "500MB"
@@ -74,7 +75,12 @@ class DataLayer(Layer):
 
 ##########
 
-def sn_connect(database = ':memory:',interactive : bool = True, **kwargs):
+def sn_head(input : ib.Table,n : int = 5):
+    print(input.count())
+    print(input.head(n))
+
+
+def sn_connect(database = ':memory:',interactive : bool = True,**kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     This function will not create a db from a jupyter notebook. run it in a script or a terminal to perform this action.
     """
@@ -89,8 +95,9 @@ def sn_connect(database = ':memory:',interactive : bool = True, **kwargs):
         conn = ib.duckdb.connect(database)
     else :
         print("Creating database at'",database,"'.")
-        ib.duckdb.connect(database)
-        conn = ib.duckdb.connect(database,**kwargs)
+        with connect(database) as con:
+            pass
+        conn = ib.duckdb.connect(database)
 
     conn.raw_sql("""
         INSTALL spatial; 
@@ -101,12 +108,36 @@ def sn_connect(database = ':memory:',interactive : bool = True, **kwargs):
     
     return conn
 
-        
+def sn_table(conn,name : str,path : str,*args,**kwargs):
+    q_startup = "create"
+    if "overwrite" in kwargs.keys():
+        print("overwriting existing")
+        q_startup = "create or replace"
 
-def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, for_gridding : bool = False) -> ib.Table: # type: ignore
+    if "bbox" in kwargs.keys():
+        print("reading bbox")
+        conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}' where lon>{kwargs["bbox"][0]} AND lon<{kwargs["bbox"][2]} AND lat>{kwargs["bbox"][1]} AND lat<{kwargs["bbox"][3]});")
+        return conn.table(name)
+    else : 
+        try :
+            conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}');")
+            return conn.table(name)
+        except:
+            if name in conn.list_tables():
+                print("Backend table exists, connected.")
+                return conn.table(name)
+        return 0   
+
+def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns, 
     return a table with a new column resulting from generating h3 ids for the points at given parameter h3 resolution.
     """
+
+    if "h3_id" in input.columns:
+        print("Existing h3_id column will be overwritten")
+        input = input.drop("h3_id")
+        # print("H3 column exists.")
+        # return input
 
     alias_code = "".join([str(x) for x in random.randint(low=0,high=9,size=10)])
     alias_name = f"h3_project_{alias_code}"
@@ -125,7 +156,7 @@ def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, fo
         
     elif type(columns) is tuple and type(columns[0]) is str and type(columns[1]) is str: 
         col_x=columns[0]
-        col_x=columns[1]
+        col_y=columns[1]
         print(f"Using coordinates columns ('{col_x}','{col_y}')")
 
     elif type(columns) is tuple and type(columns[0]) is int and type(columns[1]) is int:
@@ -136,11 +167,11 @@ def sn_project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, fo
     else :
         raise ValueError("Could not recognise coordinates columns")
 
-    if "h3_id" in input.columns:
-        print("Existing h3_id column will be overwritten")
-        input = input.drop("h3_id")
 
-    return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
+    if keep :
+        return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
+    else:
+        return input.alias(alias_name).sql(f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
 
 
 def sn_change_res(input : ib.Table,levels : int = 1) -> ib.Table :
@@ -209,7 +240,8 @@ def sn_reindex(input : ib.Table,names_from=None,values_from="id",values_agg="cou
     """Transpose a variable containing categories associated to located data into an H3 
     indexed table with new columns based on the categorical values. This performs a pivot."""
     
-    names_from = input.select(s.of_type("string")).columns
+    if names_from is None:
+        names_from = input.select(s.of_type("string")).columns
 
     return (input
             .pivot_wider(
@@ -268,7 +300,12 @@ def sn_combine(conn, input : [ib.Table], name : str, overwrite : bool = False):
     id_col = ib.union(*[tab.select("h3_id") for tab in list(input.values())],distinct=True)
     
     for (nam,tab) in input.items():
-        tab = tab.rename({nam : "band_var"})
-        id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").rename({nam+"_var" : nam}).fill_null({nam+"_var" : 0})
+        if "band_var" in tab.columns:
+            tab = tab.rename({nam : "band_var"})
+            id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").rename({nam+"_var" : nam}).drop(s.matches("h3_id_var"))
+        else :
+            id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").drop(s.matches("h3_id_var"))
+    
+    id_col_vars = id_col.select(s.matches("_var$")).columns
 
-    return conn.create_table(obj=id_col.select(~s.c("h3_id_var")),name=name,overwrite=overwrite)
+    return conn.create_table(obj=id_col.fill_null({col : 0 for col in id_col_vars}),name=name,overwrite=overwrite)#

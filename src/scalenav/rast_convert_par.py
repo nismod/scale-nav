@@ -39,7 +39,8 @@ def process(
             rast_schema : dict,
             vrt_options : dict,
             nodata : tuple | float | int,
-            include : bool = False
+            include : bool = False,
+            band : int = 1
             ):
       
       print("Writing into : ",out_file)
@@ -54,7 +55,7 @@ def process(
                         
                         for window in windows:
 
-                              out = rast_convert_core(vrt,transform=win_transfrom,win=window)
+                              out = rast_convert_core(vrt,transform=win_transfrom,win=window,band=band)
                               out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
 
                               if not include:
@@ -87,11 +88,27 @@ def rast_converter(args=None):
                           type=str,
                           )
       
+      parser.add_argument('--band',
+                          '-bd',
+                          nargs = '?',
+                          default = 1,
+                          help = "The band to read from.",
+                          type = int,
+                          )
+      
+      parser.add_argument('--in_crs',
+                          '-i_c',
+                          nargs = '?',
+                          default = None,
+                          help = "CRS of the input if not available.: %(default)s",
+                          type = str,
+                          )
+      
       parser.add_argument('--out_crs',
                           '-o_c',
                           nargs='?',
                           default="epsg:4326",
-                          help="A folder to save into. Will be created or overwriten on execution. Default: %(default)s",
+                          help="CRS of the output. Default: %(default)s",
                           type=str,
                           )
       
@@ -116,32 +133,47 @@ def rast_converter(args=None):
       #### Process parameters 
       src_file = args["in_path"]
       out_fold = args["out_path"]
+      band = args["band"]
+      in_crs = args["in_crs"]
       out_crs = args["out_crs"]
       include = args["include_negative"] # exclude non positive values by default
       num_workers = args["workers"]
 
-      out_crs = check_out_crs(out_crs)
+
+      if out_crs is not None:
+            out_crs = check_out_crs(out_crs)
+      else :
+            out_crs = check_out_crs(in_crs)
+
       print("Output CRS : ",str(out_crs))
 
+      # options here : https://rasterio.readthedocs.io/en/stable/api/rasterio.vrt.html#rasterio.vrt.WarpedVRT
       vrt_options = {
-            # 'resampling': Resampling.cubic,
             'crs': out_crs,
-            # 'transform': dst_transform,
-            # 'height': dst_height,
-            # 'width': dst_width,
       }
 
       if not os.path.exists(out_fold):
             os.mkdir(out_fold)
 
-      out_files = [out_fold + "/" + out_fold + "_" + str(i) + ".parquet" for i in range(num_workers)]
+      filename = src_file.split("/")[-1].split(".")[0]
+
+      out_files  = ""
 
       with open(src_file) as src:
-
+            
+            # print(src.count)
+            if band>src.count:
+                  raise IOError("Band parameter exceeds available bands.","Available bands : ",src.count)
+            if src.count==1:
+                  out_files = [out_fold + "/" + filename + "_" + str(i) + ".parquet" for i in range(num_workers)]
+            elif src.count>1:
+                  out_files = [out_fold + "/" + filename+ "_band_" + str(band) + "_" + str(i) + ".parquet" for i in range(num_workers)]
             # check the source and get the needed info once for user down the road. 
-            src_crs = check_crs(src)
+            src_crs = check_crs(src,in_crs=in_crs)
+            vrt_options["src_crs"] = src_crs
+            
             print("Input CRS : ", src_crs)
-
+            
             nodata = check_nodata(src)
             print("No data value : ", nodata)
 
@@ -179,7 +211,7 @@ def rast_converter(args=None):
             futures = []
             for (w,v,win) in zip(out_files,[src_file]*num_workers,batches):
                   futures.append(
-                        executor.submit(process,w,v,win,rast_schema,vrt_options,nodata,include)
+                        executor.submit(process,w,v,win,rast_schema,vrt_options,nodata,include, band)
                   )
             # Wait for all tasks to complete
             concurrent.futures.wait(futures)

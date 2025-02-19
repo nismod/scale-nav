@@ -50,10 +50,10 @@ def check_nodata(source : DatasetReader):
       """
       return source.nodatavals[0]
 
-def check_crs(source : DatasetReader): 
+def check_crs(source : DatasetReader, in_crs : str): 
       """
       """
-      return source.crs if source.crs is not None else "epsg:4326"
+      return source.crs if source.crs is not None else in_crs
 
 def infer_dtype(source : DatasetReader):
 
@@ -63,18 +63,16 @@ def infer_dtype(source : DatasetReader):
       except:
             return float32()
 
-def rast_convert_core(src, transform, win = None):
+def rast_convert_core(src, transform, win = None, band : int = 1):
       """ The core of the rast conversion can be put here 
        in order to centralise the most efficient workflow 
        that can be then used in the CL tool and function.
       """
 
       if win is not None:
-            
-            band = src.read(window=win)
-
-            height = band.shape[1]
-            width = band.shape[2]
+            band_ = src.read(indexes = band,window=win)
+            height = band_.shape[0]
+            width = band_.shape[1]
             cols, rows = meshgrid(arange(width), arange(height))
 
             xs, ys = xy(
@@ -83,10 +81,9 @@ def rast_convert_core(src, transform, win = None):
             cols=cols)
 
       else :
-            band = src.read()
-
-            height = band.shape[1]
-            width = band.shape[2]
+            band_ = src.read(indexes=band)
+            height = band_.shape[0]
+            width = band_.shape[1]
             cols, rows = meshgrid(arange(width), arange(height))
 
             xs, ys = xy(
@@ -97,7 +94,7 @@ def rast_convert_core(src, transform, win = None):
       lons = array(xs)
       lats = array(ys)
 
-      return DataFrame({"band_var" : array(band).flatten()
+      return DataFrame({"band_var" : array(band_).flatten()
                         ,'lon': lons.flatten()
                         ,'lat': lats.flatten()})
 
@@ -129,11 +126,19 @@ if __name__=="__main__":
                           type=str,
                           )
 
+      parser.add_argument('--in_crs',
+                          '-i_c',
+                          nargs='?',
+                          default=None,
+                          help="CRS of the input if it is not providee in the data. Default: %(default)s",
+                          type=str,
+                          )
+      
       parser.add_argument('--out_crs',
                           '-o_c',
                           nargs='?',
-                          default="epsg:4326",
-                          help="A folder to save into. Will be created or overwriten on execution. Default: %(default)s",
+                          default=None,
+                          help="The crs for the output. Default: %(default)s",
                           type=str,
                           )
       
@@ -148,6 +153,7 @@ if __name__=="__main__":
       args = vars(parser.parse_args())
 
       in_path = args["in_path"]
+      in_crs = args["in_crs"]
       out_path = args["out_path"]
       out_crs = args["out_crs"] # epsg:4326 by default.
       include = args["include_negative"] # exclude non positive values by default
@@ -155,8 +161,12 @@ if __name__=="__main__":
       if not search(pattern=r".parquet$",string=out_path):
                         raise ValueError("Provide a 'parquet' filename to write the outputs.")
 
- 
-      out_crs = check_out_crs(out_crs)
+
+      if out_crs is not None:
+            out_crs = check_out_crs(out_crs)
+      else : 
+             out_crs=in_crs
+
       print("Output CRS : ",str(out_crs))
 
       vrt_options = {
@@ -197,7 +207,7 @@ if __name__=="__main__":
             for path in in_paths:
                   with open(path) as src:
                         # check the source and get the needed info once for user down the road. 
-                        src_crs = check_crs(src)
+                        src_crs = check_crs(src,in_crs=in_crs)
                         print("Input CRS : ", src_crs)
 
                         nodata = check_nodata(src)
