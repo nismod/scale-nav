@@ -11,8 +11,12 @@ from rasterio.crs import CRS
 from pandas import DataFrame
 
 from scalenav.rast_convert_par import process
-from scalenav.rast_converter import rast_convert_core, check_nodata, check_crs, check_path
-
+from scalenav.rast_converter import (
+    rast_convert_core,
+    check_nodata,
+    check_crs,
+    check_path,
+)
 
 
 # Directory to save rasters
@@ -20,10 +24,14 @@ output_dir = "data"
 
 # Create the output directory if it doesn't exist
 import os
+
 os.makedirs(output_dir, exist_ok=True)
 
+
 # Function to create a 6x6 raster with specified nodata and transform
-def create_raster(filename, data, nodata_value, crs, transform,blockxsize=16,blockysize=16):
+def create_raster(
+    filename, data, nodata_value, crs, transform, blockxsize=16, blockysize=16
+):
     with rasterio.open(
         filename,
         "w",
@@ -41,10 +49,18 @@ def create_raster(filename, data, nodata_value, crs, transform,blockxsize=16,blo
     ) as dst:
         dst.write(data, 1)
 
+
 # Define a 6x6 grid of data with examples of nodata values
 nodata_values = [np.nan, -9999, -1, 0, 9999, 255]
 
-crs_values = ["epsg:4326", "epsg:4326", None, "epsg:4326", "epsg:4326", "epsg:4326",]
+crs_values = [
+    "epsg:4326",
+    "epsg:4326",
+    None,
+    "epsg:4326",
+    "epsg:4326",
+    "epsg:4326",
+]
 
 transforms = [
     from_origin(10, 50, 0.1, 0.1),  # Top-left corner (10, 50), cell size 0.1 x 0.1
@@ -55,10 +71,14 @@ transforms = [
     from_origin(-60, -15, 1.0, 1.0),
 ]
 
-filenames = [os.path.join(output_dir, f"raster_{i+1}.tif") for i in range(0,len(nodata_values))]
+filenames = [
+    os.path.join(output_dir, f"raster_{i+1}.tif") for i in range(0, len(nodata_values))
+]
 
 # Generate 6 rasters with different nodata values and transforms
-for transform, no_data, filename,crs_ in zip(transforms,nodata_values,filenames,crs_values):
+for transform, no_data, filename, crs_ in zip(
+    transforms, nodata_values, filenames, crs_values
+):
     # Create random 6x6 data with the nodata value included
     data = np.random.randint(1, 100, (32, 32)).astype(float)
     if np.isnan(no_data):  # If nodata is NaN, set some cells to NaN
@@ -70,72 +90,76 @@ for transform, no_data, filename,crs_ in zip(transforms,nodata_values,filenames,
 
 print(f"Rasters saved in '{output_dir}' directory.")
 
+
 @pytest.fixture
 def raw_files():
     [f"data/test_data_{i}.tif" for i in range(3)]
-    return 
+    return
+
 
 @pytest.fixture(scope="session")
 def rast_ingest(tmp_path_factory: pytest.TempPathFactory):
-    
+
     files = raw_files()
-    
-    for i,file in enumerate(files):
+
+    for i, file in enumerate(files):
         in_file = "data" / file
-        out_file = tmp_path_factory+f"/test_data_{i}.parquet"
-        process(src_file=in_file,out_file=out_file)
+        out_file = tmp_path_factory + f"/test_data_{i}.parquet"
+        process(src_file=in_file, out_file=out_file)
+
 
 # sample_file = f"../../data/test_data_{i}.parquet"
+
 
 def test_path():
     path = "./data/"
     in_paths = check_path(path)
-    assert len(in_paths)==9
-    
+    assert len(in_paths) == 9
+
     path_incomplete = "./data"
     in_paths = check_path(path_incomplete)
-    assert len(in_paths)==9
+    assert len(in_paths) == 9
+
 
 def test_read_nodata():
-    """Successful completion with the sample data set.
-    """
-    for file,nodat in zip(filenames,nodata_values):
+    """Successful completion with the sample data set."""
+    for file, nodat in zip(filenames, nodata_values):
         with open(file) as src:
             nodata = check_nodata(src)
-            if np.isnan(nodata): 
+            if np.isnan(nodata):
                 pass
-            else :
-                assert nodata==nodat
+            else:
+                assert nodata == nodat
+
 
 def test_read_crs():
-    """Recognition of different raster input formats.
-    """
-    for file,nodat in zip(filenames,nodata_values):
+    """Recognition of different raster input formats."""
+    for file, nodat in zip(filenames, nodata_values):
         with open(file) as src:
-            src_crs = check_crs(src)
-            assert src_crs=="epsg:4326"
+            src_crs = check_crs(src, in_crs="epsg:4326")
+            assert src_crs == "epsg:4326"
 
 
 def test_output_dim():
-    """Ouput dimensions.
-    """
-    for  filename in filenames:
+    """Ouput dimensions."""
+    for filename in filenames:
         with open(filename) as src:
             transform = src.transform
             nodata = src.nodatavals
 
             # band1 = src.read()
-            out = rast_convert_core(src,transform=transform)
+            out = rast_convert_core(src, transform=transform)
 
-            assert out.shape==(32*32,3)
+            assert out.shape == (32 * 32, 3)
 
-            out.drop(index=out.loc[out.band_var==nodata].index,inplace=True)
+            out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
             out.dropna(inplace=True)
 
-            assert out.shape==(32*32-1,3)
+            assert out.shape == (32 * 32 - 1, 3)
+
 
 # def test_input():
 #     """Validity of input. Folder with files.
-#     What to do if crs not found ? Have parameter set to None by default. 
+#     What to do if crs not found ? Have parameter set to None by default.
 #     """
 #     pass
