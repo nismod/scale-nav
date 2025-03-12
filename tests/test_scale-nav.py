@@ -30,16 +30,15 @@ coords_geom = gpd.GeoDataFrame(
                                 name="geom"),
 )
 
-coords_xy = pd.DataFrame(data={"x" : x,
-                            "y" : y,
+coords_xy = pd.DataFrame(data={"lon" : x,
+                            "lat" : y,
                             "band_var" : band_var,},
-                            columns=["x","y","band_var"],
 )
 
 
 def test_project_on_grid():
 
-    bench = [h3.latlng_to_cell(lng=x,lat=y,res=h3_res) for (x,y) in zip(coords_xy["x"],coords_xy["y"])]
+    bench = [h3.latlng_to_cell(lng=x,lat=y,res=h3_res) for (x,y) in zip(coords_xy["lon"],coords_xy["lat"])]
     res = sd.df_project_on_grid(coords_xy,res = h3_res)["h3_id"].to_list()
 
     assert res==bench
