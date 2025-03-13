@@ -22,4 +22,14 @@ target="_blank">here</a>
 
 ### THIS MODULE IS UNDER DEVELOPMENT
 
-More content will be added soon.
+The package website introduces the use cases and the different functionalities that are covered so far.
+
+## Main functionalities
+
+### Rastapar
+
+The command line tool allows for efficient, multi core ingestion of rasters into parquet tables. 
+
+### Scalenav modules
+
+A set of modules provides python functions for performing a set operations with data sets expressed as H3 cells. Additionaly, a module with the equivalent high performance functions written with ibis and duckdb. 
