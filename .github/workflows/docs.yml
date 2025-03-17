@@ -1,13 +1,13 @@
 name: docs
 
+on:
+  push:
+    branches: ["main"]
+
 # on:
 #   push:
-#     branches: ["main"]
-
-on: 
-  push:
-    tags:
-      - 'v*'
+#     tags:
+#       - "v*"
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -37,10 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies and build python module
-    #   - uses: ammaraskar/sphinx-action@master
-    #     with:
-    #         docs-folder: "docs/"
-    #         build-command: "sphinx-build -b html . _build"
+        #   - uses: ammaraskar/sphinx-action@master
+        #     with:
+        #         docs-folder: "docs/"
+        #         build-command: "sphinx-build -b html . _build"
         run: |
           sudo apt-get install pandoc
           python -m pip install --upgrade pip wheel flit sphinx myst_nb furo
@@ -52,7 +52,7 @@ jobs:
           make html
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v4
         with:
           path: build/html
 
