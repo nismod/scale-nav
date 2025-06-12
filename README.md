@@ -32,4 +32,4 @@ The command line tool allows for efficient, multi core ingestion of rasters into
 
 ### Scalenav modules
 
-A set of modules provides python functions for performing a set operations with data sets expressed as H3 cells. Additionaly, a module with the equivalent high performance functions written with ibis and duckdb. 
+A set of modules provides python functions for performing a operations with data sets expressed as H3 cells. Additionaly, a module with the equivalent high performance functions written with ibis and duckdb.

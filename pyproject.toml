@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "scalenav"
-version = "0.0.5"
+version = "0.0.6"
 
 authors = [
   { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },

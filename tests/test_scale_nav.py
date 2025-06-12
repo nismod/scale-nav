@@ -3,36 +3,14 @@
 # using the pytest framework : https://docs.pytest.org/en/stable/how-to/fixtures.html
 
 # setup some `fixtures` to make the sample data.
-import numpy as np
-import geopandas as gpd
-import pandas as pd
+
 import h3
 import scalenav.scale_nav as sn
 import scalenav.data as sd
 import scalenav.oop as snoo
 import itertools as iter
 import ibis as ib
-
-## size of table
-size = 10
-h3_res = 10
-
-x = np.random.uniform(low=-180, high=180, size=size).tolist()
-y = np.random.uniform(low=-90, high=90, size=size).tolist()
-band_var = np.random.exponential(scale=5, size=size).tolist()
-
-coords_geom = gpd.GeoDataFrame(
-    data={"band_var": band_var},
-    geometry=gpd.GeoSeries.from_xy(x=x, y=y, crs="epsg:4326", name="geom"),
-)
-
-coords_xy = pd.DataFrame(
-    data={
-        "lon": x,
-        "lat": y,
-        "band_var": band_var,
-    },
-)
+from tests.test_utils import *
 
 
 def test_project_on_grid():
@@ -59,7 +37,7 @@ def test_change_scale_xy():
 
 def test_scale_change_down():
 
-    conn = snoo.sn_connect()
+    conn = snoo.connect()
 
     test_start_res = 7
     test_levels = [1, 3]
@@ -75,7 +53,7 @@ def test_scale_change_down():
 
         res_pd = sn.change_res(resc_test, lev)
         # generating the data set with the new
-        res_ib = snoo.sn_change_res(resc_test_back, lev)
+        res_ib = snoo.change_res(resc_test_back, lev)
 
         res_df_down = res_ib.execute()
 
@@ -85,7 +63,7 @@ def test_scale_change_down():
             len(np.intersect1d(res_df_down.h3_id, res_pd.h3_id)) == res_df_down.shape[0]
         ), ""
 
-        res_df_up = snoo.sn_change_res(res_ib, levels=-lev).execute()
+        res_df_up = snoo.change_res(res_ib, levels=-lev).execute()
 
         assert np.all(
             np.float32(res_df_up.vals_var) == np.float32(resc_test.vals_var)

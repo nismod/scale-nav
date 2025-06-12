@@ -18,7 +18,6 @@ from scalenav.rast_converter import (
     check_path,
 )
 
-
 # Directory to save rasters
 output_dir = "data"
 
@@ -93,8 +92,7 @@ print(f"Rasters saved in '{output_dir}' directory.")
 
 @pytest.fixture
 def raw_files():
-    [f"data/test_data_{i}.tif" for i in range(3)]
-    return
+    return [f"data/test_data_{i}.tif" for i in range(3)]
 
 
 @pytest.fixture(scope="session")
@@ -147,7 +145,6 @@ def test_output_dim():
             transform = src.transform
             nodata = src.nodatavals
 
-            # band1 = src.read()
             out = rast_convert_core(src, transform=transform)
 
             assert out.shape == (32 * 32, 3)
