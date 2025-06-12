@@ -159,7 +159,7 @@ class ScalenavProcess(Backend):
         return concat(**kwargs)
 
     def create_table(self,name : str, obj : str,**kwargs): # -> ib.Table:
-        return Layer.__class__(super().create_table(name=name,obj=obj,**kwargs).op())
+        return Layer.__class__(super().create_table(name,obj=obj,**kwargs).op())
         
          
 
