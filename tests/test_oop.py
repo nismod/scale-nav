@@ -25,8 +25,8 @@ conn = snoo.connect()
 # print(x, y)
 
 table1 = conn.create_table(
+    "table1",
     obj=pd.DataFrame({"x": x, "y": y, "band_var": band_var}),
-    name="table1",
 )
 
 table1_h3 = snoo.project(table1, res=h3_res)
