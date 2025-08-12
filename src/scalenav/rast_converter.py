@@ -27,9 +27,11 @@ from pyarrow import (
     uint16,
     table,
     Table,
+    table,
     from_numpy_dtype,
 )
 from pyarrow.parquet import ParquetWriter
+
 
 from tqdm import tqdm
 
@@ -145,7 +147,7 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
 
     Returns
     -------
-    DataFrame
+    DataFrame | pyarrow.table
         A data frame of the transformed raster window.
     """
 

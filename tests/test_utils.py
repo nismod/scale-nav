@@ -7,7 +7,9 @@ size = 10
 h3_res = 10
 
 x = np.random.uniform(low=-180, high=180, size=size).tolist()
+
 y = np.random.uniform(low=-90, high=90, size=size).tolist()
+
 band_var = np.random.exponential(scale=5, size=size).tolist()
 
 coords_geom = gpd.GeoDataFrame(

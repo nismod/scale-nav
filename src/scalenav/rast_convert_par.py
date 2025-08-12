@@ -12,6 +12,7 @@ import concurrent.futures
 
 from pyarrow import float32, schema, RecordBatch
 from pyarrow.parquet import ParquetWriter
+import pyarrow.compute as pc
 
 from scalenav.rast_converter import (
     rast_convert_core,
@@ -25,19 +26,19 @@ from scalenav.rast_converter import (
 from sys import argv
 import argparse
 
-#####
-
 #### input and output options
 
 dst_crs = CRS.from_epsg(4326)
 
 ##### Process
 
-# src_file = check_path(src_file)
-
 writer_args = {
     "write_statistics": False,
 }
+
+nodata = 0
+nodata_filter_expr = pc.field("band_var") != nodata
+negative_filter_expr = pc.greater(pc.field("band_var"), 0)
 
 
 def process(
@@ -89,13 +90,17 @@ def process(
                     out = rast_convert_core(
                         vrt, transform=win_transfrom, win=window, band=band
                     )
+                    # out = out.filter(nodata_filter_expr)
+
                     out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
 
                     if not include:
+                        # out = out.filter(negative_filter_expr)
                         out.drop(index=out.loc[out.band_var <= 0].index, inplace=True)
 
                     if out.shape[0] > 0:
                         writer.write(
+                            # out
                             RecordBatch.from_pandas(
                                 df=out,
                                 schema=rast_schema,
@@ -104,10 +109,7 @@ def process(
                             )
                         )
                     # gc.collect()
-                    del out
-
-
-# if __name__=="__main__":
+                    # del out
 
 
 def rast_converter(args=None):

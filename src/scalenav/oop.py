@@ -9,7 +9,7 @@ from ibis.backends.duckdb import *
 import ibis as ib
 import re
 from numpy import random,all,unique
-from duckdb import connect
+from duckdb import connect as ddb_connect
 from scalenav.utils import *
 
 
@@ -201,8 +201,8 @@ def connect(database = ':memory:',interactive : bool = True,**kwargs):
         print("connecting to existing database.")
         conn = ib.duckdb.connect(database)
     else :
-        print("Creating database at'",database,"'.")
-        with connect(database) as con:
+        print("Creating database at '",database,"'.",sep="")
+        with ddb_connect(database) as con:
             pass
         conn = ib.duckdb.connect(database)
 
@@ -280,7 +280,7 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
     res : 
         the resolution to project
     columns : 
-        the columns containing the coordinates if they have unusual names. Anything like lon, y, easting should be automatically detected.
+        The columns containing the coordinates if they have unusual names. In order (x,y). Anything like lon, y, easting should be automatically detected.
     keep : 
         keep the original coordinates columns in the output
 
@@ -553,6 +553,46 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
     id_col_vars = id_col.select(s.matches("_var$")).columns
 
     return conn.create_table(name,obj=id_col.fill_null({col : fill_val for col in id_col_vars}),overwrite=overwrite)#
+
+
+def simplify(table,geometry="geometry",tolerance=.1, include = True, preserve_topology = True):
+    """Simplify a geometry column in a table. The ibis geospatial method is not registered for a duckdb backend, so this is a workaround.
+    
+    See : https://duckdb.org/docs/stable/core_extensions/spatial/functions.html#st_simplify
+    
+    Parameters
+    ----------
+    table : ib.Table
+        _description_
+    geometry : str, optional
+        _description_, by default "geometry"
+    tolerance : float, optional
+        the tolerance, by default .1
+    include : bool, optional
+        whether to include the old geometry in the output, by default True
+    preserve_topology : bool, optional
+        whether to preserve the original topology, by default True
+
+    Returns
+    -------
+    ib.Table
+        _description_
+    """    
+
+    alias = alias_generator()
+    
+    if include:
+        head_query = f"""SELECT * EXCLUDE {geometry}, {geometry}::GEOMETRY as {geometry}"""
+    else : 
+        head_query = f"""SELECT * EXCLUDE {geometry}"""
+        # return table.alias(alias).sql(include_query + """, ST_SIMPLIFY({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};""")
+    if preserve_topology:
+        tail_query = f""",ST_SimplifyPreserveTopology({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};"""
+    else : 
+        tail_query = f""",ST_SIMPLIFY({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};"""
+
+    return table.alias(alias).sql(head_query + tail_query)
+
 
 
 

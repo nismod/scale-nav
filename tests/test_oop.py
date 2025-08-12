@@ -16,30 +16,37 @@ import scalenav.scale_nav as sn
 from tests.test_utils import *
 from tests.test_rast_converter import rast_ingest
 
+
 ##############
 # %%
-conn = snoo.connect()
-
-# %%
-
-# print(x, y)
-
-table1 = conn.create_table(
-    "table1",
-    obj=pd.DataFrame({"x": x, "y": y, "band_var": band_var}),
-)
-
-table1_h3 = snoo.project(table1, res=h3_res)
+@pytest.fixture
+def conn():
+    return snoo.connect()
 
 
 # %%
-def test_project():
 
+
+@pytest.fixture
+def table1_h3(conn):
+
+    # tdata_1 = conn.read_parquet("data/test_data_0.parquet")
+    # tdata_1
+
+    table1 = conn.create_table(
+        "table1",
+        obj=pd.DataFrame({"x": x, "y": y, "band_var": band_var}),
+    )
+
+    return snoo.project(table1, res=h3_res)
+
+
+# %%
+def test_project(table1_h3):
     coords_xy["h3_id"] = [
         h3.latlng_to_cell(lng=x, lat=y, res=h3_res)
         for (x, y) in zip(coords_xy["lon"], coords_xy["lat"])
     ]
-    # coords_xy.ser
 
     table1_h3_df = table1_h3.execute()
 
@@ -68,14 +75,8 @@ def test_project():
 
 # %%
 
-tdata_1 = conn.read_parquet("data/test_data_0.parquet")
-tdata_1
 
-# %%
-
-
-def test_change_res():
-
+def test_change_res(table1_h3):
     table_ds_df = snoo.change_res(table1_h3, levels=-1).execute().set_index("h3_id")
 
     table_res_df = (
@@ -87,8 +88,7 @@ def test_change_res():
     assert np.all(table_ds_df - table_res_df == 0)
 
 
-def test_add_centr():
-
+def test_add_centr(table1_h3):
     table1_centr = snoo.add_centr(table1_h3)
     assert "geom" in table1_centr.columns
     assert (table1_centr.select(s.of_type("GEOMETRY")).count() > 0).execute()
