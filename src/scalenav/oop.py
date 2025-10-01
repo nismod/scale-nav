@@ -11,7 +11,7 @@ import re
 from numpy import random,all,unique
 from duckdb import connect as ddb_connect
 from scalenav.utils import *
-
+from itertools import chain
 
 configs = {
     "memory_limit" : "500MB"
@@ -169,7 +169,7 @@ def head(input : ib.Table,n : int = 5):
     print(input.count())
     print(input.head(n))
 
-def connect(database = ':memory:',interactive : bool = True,**kwargs):
+def connect(database : str = ':memory:',interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [],**kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     For details on the additional parameters, refer to : https://duckdb.org/docs/stable/configuration/overview.html
 
@@ -184,6 +184,8 @@ def connect(database = ':memory:',interactive : bool = True,**kwargs):
 
     kwargs : dict
         other parameters to the duckDB backend, such as memory limit, nounber of cores
+        - community_ext
+        - other_ext
 
     Returns
     --------------------
@@ -196,22 +198,38 @@ def connect(database = ':memory:',interactive : bool = True,**kwargs):
 
     if database in ["memory", ':memory:', "mem"]:
         print("Connecting to a temporary in-memory DB instance.")
-        conn = ib.duckdb.connect()
+        conn = ib.duckdb.connect(**kwargs)
     elif os.path.exists(database):
         print("connecting to existing database.")
-        conn = ib.duckdb.connect(database)
+        conn = ib.duckdb.connect(database,**kwargs)
     else :
         print("Creating database at '",database,"'.",sep="")
-        with ddb_connect(database) as con:
+        with ddb_connect(database,**kwargs) as con:
             pass
-        conn = ib.duckdb.connect(database)
+        conn = ib.duckdb.connect(database,**kwargs)
 
-    conn.raw_sql("""
-        INSTALL spatial; 
-        LOAD spatial;
-        INSTALL h3 FROM community;
-        LOAD h3;
+    if preload_ext:
+        conn.raw_sql("""
+            INSTALL spatial; 
+            LOAD spatial;
+
+            INSTALL h3 FROM community;
+            LOAD h3;
         """)
+
+    if len(community_ext) > 0:
+        for ext in community_ext:
+            conn.raw_sql(f"""
+                INSTALL {ext} FROM community;
+                LOAD {ext};
+            """)
+    
+    if len(other_ext) > 0:
+        for ext in other_ext:
+            conn.raw_sql(f"""
+                INSTALL {ext};
+                LOAD {ext};
+            """)
     
     return conn
 
@@ -300,8 +318,14 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
     alias_name = alias_generator()
 
     if columns is None:
-        col_x = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)]
-        col_y = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)]
+        
+        col_x = [
+            x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)
+        ]
+        
+        col_y = [
+            x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)
+        ]
 
         if len(col_x)>1 or len(col_y)>1:
             raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
@@ -405,9 +429,7 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
             .sql(f"""Select * EXCEPT (h3_id), h3_cell_to_parent(h3_id,{res+levels}) as h3_id from {alias_code};""")
             .group_by("h3_id")
             .agg(**transform_expr)
-            
 )
-
 
 def add_centr(input : ib.Table):
     """Add the centroid of a hex cell in the table expression.
@@ -514,7 +536,7 @@ def concat(input,**kwargs):
     """    
     
     if all(["h3_id" in tab.columns for tab in list(input.values())]):
-        return ib.union(*list(input.values()),**kwargs).group_by("h3_id").agg()
+        return ib.union(*list(input.values()),**kwargs)#.group_by("h3_id").agg()
     return ib.union(*list(input.values()),**kwargs)
 
 
@@ -581,6 +603,7 @@ def simplify(table,geometry="geometry",tolerance=.1, include = True, preserve_to
 
     alias = alias_generator()
     
+    
     if include:
         head_query = f"""SELECT * EXCLUDE {geometry}, {geometry}::GEOMETRY as {geometry}"""
     else : 
@@ -607,9 +630,6 @@ def constrain(layer, constraint):
         _description_
     """    
     pass
-
-# def voronoi(layer, limit):
-#     pass
 
 
 def voronoi(layer, limit=10): 
@@ -668,7 +688,7 @@ def join(table1,table2,predicates : list = ["h3_id"],how="outer"):
     return (
         ib.join(table1,table2,predicates=predicates,how=how)
         .mutate(**{val : ib.ifelse(_[val].isnull(),_[val + "_right"],_[val]) for val in predicates})
-        .select(~s.c(*[f"{val}_right" for val in predicates]))
+        .select(~s.cols(*[f"{val}_right" for val in predicates]))
         ) 
 
 
@@ -703,3 +723,249 @@ def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
     return input.alias(knn_alias).sql(f"""
     Select *, h3_grid_disk(h3_id,{k}) as {colname} from h3_disk;
     """)
+
+
+def reduce(table, columns : dict, exclude : bool = True, print_query : bool = False):
+    """Aggregate columns in a table on the backend side. Only supports addition of variables at the moment.
+
+    Parameters
+    ----------
+    table : ibis.Table
+        An ibis table.
+    columns : dict
+        A dict matching the desired result to the columns that need aggretgation in the existing table. 
+        The key will be used as column name in the return, and the value should be list of columns to add together or a regex matching these columns. 
+        Ex : { "KL" : '[K-L]' } will match columns containing K,L and add them into a column named 'KL'
+    exclude : bool, optional
+        Exclude the original columns from the returned table, by default True
+
+    Returns
+    -------
+    an ibis Table
+        An ibis table where the desired aggregation has been applied.
+    """    
+
+    alias = alias_generator()
+
+    all_values = list(chain.from_iterable(columns.values()))
+    
+    # if exclude:
+    #     exclude_query = f"EXCLUDE ({" ".join(all_values)}) "
+    # else:
+    #     exclude_query = " "
+
+    reduce_statement = ",".join([" + ".join([val for val in columns[key]]) + f" as {key}" for key in columns.keys()])
+    
+    full_query = f"SELECT * , " + reduce_statement + f" FROM {alias};"
+
+    if print_query:
+        print("Running query : ", full_query)
+
+    if exclude:
+        return (
+            table
+            .alias(alias)
+            .sql(full_query)
+            .select(~s.cols(*all_values))
+        )
+    else:
+        return (
+            table
+            .alias(alias)
+            .sql(full_query)
+        )
+
+
+
+def fill_poly(table,res : int = 10, geometry = "geometry"):
+    """Fill a geometry column containing polygons with H3 cells.
+
+    Parameters
+    ----------
+    table : ibis Table
+        A table with polygon geometries.
+    res : int, optional
+        H3 resolution to use, by default 10
+
+    Returns
+    -------
+    ibis Table
+        A table with a new column called 'h3_id' containing a list of cell indices for each geometry.
+    """
+
+    alias= alias_generator()
+    
+    return (
+        table
+        .alias(alias)
+        .sql(f"""
+            SELECT *,
+            h3_polygon_wkt_to_cells_string(ST_AsText({geometry}::GEOMETRY),{res}) as h3_id
+            FROM {alias};
+        """)
+    )
+
+def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
+    """Dump and fill with H3 cells
+
+    Does not preserve order of values.
+
+    Parameters
+    ----------
+    table : ibis Table
+        An ibis table with a geometry column
+    res : int, optional
+        _description_, by default 10
+    keep : bool, optional
+        Whether to keep the original geometry in the output
+
+    Returns
+    -------
+    ibis Table
+        A table where only the polygonal geometries are preserved, 
+        the multipolygons are unnested into individual polygons and then filled with h3 cells. 
+        Because of that, the order and original number of rows is not preserved. 
+    """    
+    
+    alias = alias_generator()
+
+    h3_collect_win = ib.window(preceding=0,following=0)
+
+    if keep:
+        multipoly_cols = ["geoms_dump_unnest","geoms","h3_id_temp"]
+    else:
+        multipoly_cols = [geometry,"geoms_dump_unnest","geoms","h3_id_temp"]
+
+    res_multi = (
+        table
+        .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
+        .filter(_[geometry].geometry_type()=="MULTIPOLYGON")
+        .alias(alias)
+        .sql(f"""SELECT *, ST_DUMP({geometry}::GEOMETRY) as geoms_dump_unnest from {alias}""") # ::GEOMETRY
+        .mutate(geoms = _.geoms_dump_unnest.map(lambda x : x["geom"])) # might not need to .map here
+        .unnest("geoms")
+        .mutate(
+            lng=_.geoms.centroid().x(),
+            lat=_.geoms.centroid().y(),
+            )
+        .pipe(
+            project,
+            columns=("lng","lat"),
+            res=res,
+            keep=False,
+        )
+        .mutate(
+            h3_id_temp= _.h3_id.collect().over(h3_collect_win),
+        )
+        .rename({"h3_id_temp" : "h3_id"})
+        .pipe(fill_poly,res=res,geometry="geoms")
+        .mutate(h3_id = ib.ifelse(
+            _.h3_id.length()==0,
+            _.h3_id_temp,
+            _.h3_id,
+        ))
+        .select(~s.cols(*multipoly_cols))
+    )
+
+    if keep:
+        poly_cols = ["h3_id_temp",]
+    else:
+        poly_cols = [geometry,"h3_id_temp"]
+    
+    res_poly = (
+        table
+        .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
+        .filter(_[geometry].geometry_type()=="POLYGON")
+        .mutate(
+            lng=_[geometry].centroid().x(),
+            lat=_[geometry].centroid().y(),
+            )
+        .pipe(
+            project,
+            res=res,
+            columns=("lng","lat"),
+            keep=False,
+        )
+        .mutate(
+            h3_id_temp= _.h3_id.collect().over(h3_collect_win),
+        )
+        .rename({"h3_id_temp" : "h3_id"})
+        .pipe(fill_poly,res=res,geometry=geometry)
+        .mutate(h3_id = ib.ifelse(
+            _.h3_id.length()==0,
+            _.h3_id_temp,
+            _.h3_id,
+        ))
+        .select(~s.cols(*poly_cols))
+    )
+
+    return (
+        concat({
+            "res_multi" : res_multi,
+            "res_poly" : res_poly,
+        })
+    )
+
+
+
+
+def rast_fill_h3(
+    layer, 
+    envelope, 
+    res : int = 7, 
+    geometry : bool = True, 
+    columns : list[str] = ['band_var'],
+    ):
+    """Transform a set of points into a h3 voronoi. 
+    Usefull for converting rasters where only the centroid is given (ex : outputs of rastapar) into H3 covers.
+    Highly efficient function, requires careful usage as the outputs can get VERY big.
+
+    USE AT OWN RISK ! Can be very resource intensive
+
+    Parameters
+    ----------
+    layer : ibis table 
+        Typically rastapar output, or the following columns are needed : lon, lat, band_var.
+    envelope : a shapely box, or polygon
+        Limits for the Voronoi process
+    res : int, optional
+        Resolution of cells to fill with, by default 7
+    geometry : bool, optional
+        Whether to return the geometries, by default False
+
+    """    
+
+    alias = alias_generator()
+    
+    return (
+        layer
+        .mutate(
+            geom = _.lon.point(_.lat),
+        )
+        .agg({
+            var : _[var].collect() for var in columns } | 
+            {"geom" : _.geom.unary_union(),
+        })
+        .alias(alias)
+        .sql(f"""SELECT {'.'.join(columns)}, st_dump(ST_VoronoiDiagram(geom::GEOMETRY)) as voronoi from {alias};
+        """)
+        # WIP : adding multicolumns support. Is it really needed though ? 
+        .mutate(zipped = (_.voronoi.zip(*[_[var] for var in columns])))
+        .unnest('zipped')
+        .unpack("zipped")
+        .mutate(
+            geom=_.f2['geom'].intersection(envelope)
+        )
+        .rename({"band_var" : 'f1'})
+        .select('band_var',"geom")
+        .pipe(dump_fill_h3,geometry_column="geom",res=res)
+        .mutate(
+            w = _.h3_id.length(),
+        )
+        .unnest('h3_id')
+        .mutate(
+            band_var=_.band_var/_.w
+        )
+        .select(~s.cols("w"))
+        .pipe(add_geom)
+    )
