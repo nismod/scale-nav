@@ -233,7 +233,14 @@ def connect(database : str = ':memory:',interactive : bool = True, preload_ext :
     
     return conn
 
-def table(conn,name : str,path : str,coords = ["lon","lat"],*args,**kwargs):
+def table(
+    conn, 
+    name : str, 
+    path : str,
+    coords = ["lon","lat"],
+    *args,
+    **kwargs
+    ):
     """Create a table in the database out of a parquet file.
     This function 
 
@@ -535,6 +542,8 @@ def concat(input,**kwargs):
         One combined layer of the inputs stacked
     """    
     
+    input = {key : val for key,val in input.items() if (val.count()>=1).execute()}
+
     if all(["h3_id" in tab.columns for tab in list(input.values())]):
         return ib.union(*list(input.values()),**kwargs)#.group_by("h3_id").agg()
     return ib.union(*list(input.values()),**kwargs)
@@ -828,29 +837,27 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
     """    
     
     alias = alias_generator()
+    alias_geometry = alias_generator()
+    alias_lon = alias_generator()
+    alias_lat = alias_generator()
 
     h3_collect_win = ib.window(preceding=0,following=0)
-
-    if keep:
-        multipoly_cols = ["geoms_dump_unnest","geoms","h3_id_temp"]
-    else:
-        multipoly_cols = [geometry,"geoms_dump_unnest","geoms","h3_id_temp"]
 
     res_multi = (
         table
         .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
         .filter(_[geometry].geometry_type()=="MULTIPOLYGON")
         .alias(alias)
-        .sql(f"""SELECT *, ST_DUMP({geometry}::GEOMETRY) as geoms_dump_unnest from {alias}""") # ::GEOMETRY
-        .mutate(geoms = _.geoms_dump_unnest.map(lambda x : x["geom"])) # might not need to .map here
-        .unnest("geoms")
-        .mutate(
-            lng=_.geoms.centroid().x(),
-            lat=_.geoms.centroid().y(),
-            )
+        .sql(f"""SELECT *, ST_DUMP({geometry}::GEOMETRY) as {alias_geometry} from {alias}""") # ::GEOMETRY
+        .unnest(alias_geometry)
+        .mutate(**{alias_geometry : _[alias_geometry]['geom']}) # might not need to .map here
+        .mutate(**{
+            alias_lon : _[alias_geometry].centroid().x(),
+            alias_lat : _[alias_geometry].centroid().y(),
+        })
         .pipe(
             project,
-            columns=("lng","lat"),
+            columns=(alias_lon,alias_lat),
             res=res,
             keep=False,
         )
@@ -858,53 +865,81 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
             h3_id_temp= _.h3_id.collect().over(h3_collect_win),
         )
         .rename({"h3_id_temp" : "h3_id"})
-        .pipe(fill_poly,res=res,geometry="geoms")
+        # .drop('h3_id')
+        .pipe(fill_poly,res=res,geometry=alias_geometry)
         .mutate(h3_id = ib.ifelse(
             _.h3_id.length()==0,
             _.h3_id_temp,
             _.h3_id,
         ))
-        .select(~s.cols(*multipoly_cols))
     )
 
-    if keep:
-        poly_cols = ["h3_id_temp",]
-    else:
-        poly_cols = [geometry,"h3_id_temp"]
-    
     res_poly = (
         table
         .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
         .filter(_[geometry].geometry_type()=="POLYGON")
-        .mutate(
-            lng=_[geometry].centroid().x(),
-            lat=_[geometry].centroid().y(),
-            )
+        .mutate(**{
+            alias_lon : _[geometry].centroid().x(),
+            alias_lat : _[geometry].centroid().y(),
+        })
         .pipe(
             project,
             res=res,
-            columns=("lng","lat"),
+            columns=(
+                alias_lon,
+                alias_lat,
+            ),
             keep=False,
         )
         .mutate(
             h3_id_temp= _.h3_id.collect().over(h3_collect_win),
         )
         .rename({"h3_id_temp" : "h3_id"})
+        # .drop("h3_id")
         .pipe(fill_poly,res=res,geometry=geometry)
         .mutate(h3_id = ib.ifelse(
             _.h3_id.length()==0,
             _.h3_id_temp,
             _.h3_id,
         ))
-        .select(~s.cols(*poly_cols))
     )
 
-    return (
-        concat({
-            "res_multi" : res_multi,
-            "res_poly" : res_poly,
-        })
-    )
+    if keep:
+        multipoly_cols = [alias_geometry,"h3_id_temp",]
+        poly_cols = ["h3_id_temp",]
+        
+        return (
+            concat({
+                "res_multi" : (
+                    res_multi
+                    .select(~s.cols(*multipoly_cols))
+                    .try_cast({geometry : "GEOMETRY"})
+                    ),
+                "res_poly" : (
+                    res_poly
+                    .select(~s.cols(*poly_cols))
+                    .try_cast({geometry : "GEOMETRY"})
+                ),
+            })
+        )
+
+    else:
+        multipoly_cols = [geometry,alias_geometry,"h3_id_temp"]
+        poly_cols = [geometry,"h3_id_temp"]
+
+        return (
+            concat({
+                "res_multi" : (
+                    res_multi
+                    .select(~s.cols(*multipoly_cols))
+                    ),
+                "res_poly" : (
+                    res_poly
+                    .select(~s.cols(*poly_cols))
+                    ),
+            })
+        )
+
 
 
 
@@ -936,36 +971,53 @@ def rast_fill_h3(
     """    
 
     alias = alias_generator()
-    
-    return (
+    alias_row_id = alias_generator()
+    alias_geom = alias_generator()
+    alias_weight = alias_generator()
+    alias_voronoi = alias_generator()
+
+    # print(alias)
+    # print(alias_row_id)
+    # print(alias_weight)
+    # print(alias_voronoi)
+
+
+    layer_geom_vor = (
         layer
-        .mutate(
-            geom = _.lon.point(_.lat),
+        .mutate(**{
+            alias_geom : _.lon.point(_.lat),
+        })
+        .select(
+            alias_geom
         )
-        .agg({
-            var : _[var].collect() for var in columns } | 
-            {"geom" : _.geom.unary_union(),
+        .agg(**{
+            alias_geom : _[alias_geom].try_cast("GEOMETRY").unary_union(),
         })
         .alias(alias)
-        .sql(f"""SELECT {'.'.join(columns)}, st_dump(ST_VoronoiDiagram(geom::GEOMETRY)) as voronoi from {alias};
+        .sql(f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
         """)
-        # WIP : adding multicolumns support. Is it really needed though ? 
-        .mutate(zipped = (_.voronoi.zip(*[_[var] for var in columns])))
-        .unnest('zipped')
-        .unpack("zipped")
-        .mutate(
-            geom=_.f2['geom'].intersection(envelope)
-        )
-        .rename({"band_var" : 'f1'})
-        .select('band_var',"geom")
-        .pipe(dump_fill_h3,geometry_column="geom",res=res)
-        .mutate(
-            w = _.h3_id.length(),
-        )
-        .unnest('h3_id')
-        .mutate(
-            band_var=_.band_var/_.w
-        )
-        .select(~s.cols("w"))
-        .pipe(add_geom)
+        .mutate(**{alias_voronoi : _[alias_voronoi].intersection(envelope)})
+        .mutate(**{alias_row_id : ib.row_number()})
     )
+    
+    
+    return_layer = (
+        layer
+        .mutate(**{alias_row_id : ib.row_number()})
+        .join(layer_geom_vor,predicates=alias_row_id,how='inner')
+        .select(~s.cols(alias_row_id))
+        .pipe(dump_fill_h3,geometry=alias_voronoi,res=res)
+        .mutate(**{
+            alias_weight : _.h3_id.length(),
+        })
+        .unnest('h3_id')
+        .mutate(**{
+            val : _[val]/_[alias_weight] for val in columns
+        })
+        .select(~s.cols(alias_weight))
+    )
+
+    if geometry:
+        return return_layer.pipe(add_geom)
+    else :
+        return return_layer
