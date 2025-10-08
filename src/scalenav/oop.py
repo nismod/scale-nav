@@ -996,17 +996,18 @@ def rast_fill_h3(
         .alias(alias)
         .sql(f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
         """)
-        .mutate(**{alias_voronoi : _[alias_voronoi].intersection(envelope)})
+        .mutate(**{alias_voronoi : _[alias_voronoi].intersection(envelope).try_cast("GEOMETRY")})
         .mutate(**{alias_row_id : ib.row_number()})
     )
     
     
     return_layer = (
         layer
+        .drop(s.of_type("GEOMETRY"))
         .mutate(**{alias_row_id : ib.row_number()})
         .join(layer_geom_vor,predicates=alias_row_id,how='inner')
         .select(~s.cols(alias_row_id))
-        .pipe(dump_fill_h3,geometry=alias_voronoi,res=res)
+        .pipe(dump_fill_h3,geometry=alias_voronoi,res=res,keep=False)
         .mutate(**{
             alias_weight : _.h3_id.length(),
         })
