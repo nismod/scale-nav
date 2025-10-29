@@ -399,6 +399,9 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
     if "h3_id" not in input.columns:
         raise Warning("Project data into h3 first with `project`.")
     
+    if (input.count()==0).execute():
+        return input.select('h3_id',s.matches('_var$'))
+
     res = (
         input
         .alias(alias_code)
