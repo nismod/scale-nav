@@ -267,7 +267,6 @@ def table(
     ----------------
     ibis.Table
         An ibis table object connected to the backend table. 
-
     """
     
     q_startup = "create"
@@ -292,7 +291,7 @@ def table(
             if name in conn.list_tables():
                 print("Backend table exists, connected.")
                 return conn.table(name)
-        return 0   
+        raise Warning('Table could not be created. Check source file, or connection.')  
 
 def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns,
@@ -765,7 +764,7 @@ def reduce(table, columns : dict, exclude : bool = True, print_query : bool = Fa
 
     reduce_statement = ",".join([" + ".join([val for val in columns[key]]) + f" as {key}" for key in columns.keys()])
     
-    full_query = f"SELECT * , " + reduce_statement + f" FROM {alias};"
+    full_query = f"SELECT *, " + reduce_statement + f" FROM {alias};"
 
     if print_query:
         print("Running query : ", full_query)
