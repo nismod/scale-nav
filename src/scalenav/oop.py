@@ -169,6 +169,7 @@ def head(input : ib.Table,n : int = 5):
     print(input.count())
     print(input.head(n))
 
+
 def connect(database : str = ':memory:',interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [],**kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     For details on the additional parameters, refer to : https://duckdb.org/docs/stable/configuration/overview.html
@@ -233,11 +234,20 @@ def connect(database : str = ':memory:',interactive : bool = True, preload_ext :
     
     return conn
 
+
+def unnest_h3(table):
+    if "h3_id" in table.columns:
+        if "h3_id" in table.select(s.of_type("array")).columns:
+            return table.unnest("h3_id").mutate(band_var=1)
+    else :
+        return table
+
 def table(
     conn, 
     name : str, 
     path : str,
     coords = ["lon","lat"],
+    unnest : bool = True,
     *args,
     **kwargs
     ):
@@ -277,21 +287,22 @@ def table(
             q_startup = "create or replace"
         else:
             if name in conn.list_tables():
-                return conn.table(name)
+                return unnest_h3(conn.table(name))
 
     if "bbox" in kwargs.keys():
         print("Reading bbox")
         conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}' where {coords[0]}>{kwargs["bbox"][0]} AND {coords[0]}<{kwargs["bbox"][2]} AND {coords[1]}>{kwargs["bbox"][1]} AND {coords[1]}<{kwargs["bbox"][3]});")
-        return conn.table(name)
+        return unnest_h3(conn.table(name))
     else : 
         try :
             conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}');")
-            return conn.table(name)
+            return unnest_h3(conn.table(name))
         except:
             if name in conn.list_tables():
                 print("Backend table exists, connected.")
-                return conn.table(name)
+                return unnest_h3(conn.table(name))
         raise Warning('Table could not be created. Check source file, or connection.')  
+
 
 def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns,
@@ -410,12 +421,18 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
         .execute()
     )
 
+    _var = [val for val in input.columns if re.search(pattern="_var$",string=val)]
+
     if levels>0:
         
         rescale_factor = 7**(-levels)
         # transformation expressions for navigating scales 
         if transform_expr is None:
-            transform_expr = { x : ( _[x] * rescale_factor ) for x in input.columns if re.search(pattern="_var$",string=x)}
+            transform_expr = { x : ( _[x] * rescale_factor ) for x in _var}
+        else : 
+            for val in _var:
+                if val not in list(transform_expr.keys()):
+                    transform_expr[val] = ( _[val] * rescale_factor )
     
         return (
             input
@@ -430,7 +447,12 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
     elif levels<=0:
         
         if transform_expr is None:
-            transform_expr = { x : ( _[x].sum() ) for x in input.columns if re.search(pattern="_var$",string=x)}
+            transform_expr = { x : ( _[x].sum() ) for x in _var}
+        else : 
+            for val in _var:
+                if val not in list(transform_expr.keys()):
+                    transform_expr[val] = ( _[val].sum() )
+        
         
         return (
             input
@@ -578,10 +600,10 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
     
     for (nam,tab) in input.items():
         if "band_var" in tab.columns:
-            tab = tab.rename({nam : "band_var"})
-            id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").rename({nam+"_var" : nam}).drop(s.matches("h3_id_var"))
+            tab = tab.rename({nam + "_var" : "band_var"})
+            id_col = id_col.join(tab,how="left",predicates="h3_id",rname=f"{nam}_{{{'name'}}}_var").drop(s.matches("h3_id_var"))
         else :
-            id_col = id_col.join(tab,how="left",predicates="h3_id",rname="{name}_var").drop(s.matches("h3_id_var"))
+            id_col = id_col.join(tab,how="left",predicates="h3_id",rname=f"{nam}_{{{'name'}}}_var").drop(s.matches("h3_id_var"))
     
     id_col_vars = id_col.select(s.matches("_var$")).columns
 
