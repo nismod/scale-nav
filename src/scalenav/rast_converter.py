@@ -1,10 +1,12 @@
-"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce a 3 column parquet 
+"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce 3 column parquet 
 table with coordinates and band value.
 
 See the data_ingestion notebook for templates of this.
 """
 
 import argparse
+import json
+import os
 from os.path import exists, isdir, isfile
 from re import search
 from glob import glob
@@ -34,6 +36,19 @@ from pyarrow.parquet import ParquetWriter
 
 
 from tqdm import tqdm
+
+# #region agent log
+def _dbg_log(location, message, data=None, hypothesis_id=None):
+    try:
+        import resource
+        import sys
+        r = resource.getrusage(resource.RUSAGE_SELF)
+        rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
+        with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
+            f.write(json.dumps({"location": location, "message": message, "data": data or {}, "rss_mb": round(rss_mb, 2), "hypothesisId": hypothesis_id, "pid": os.getpid()}) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 
 def check_path(in_path: str):
@@ -150,6 +165,11 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
     DataFrame | pyarrow.table
         A data frame of the transformed raster window.
     """
+    # #region agent log
+    win_h = getattr(win, "height", 0) if win else 0
+    win_w = getattr(win, "width", 0) if win else 0
+    _dbg_log("rast_converter.py:rast_convert_core:entry", "Core entry", {"win_height": win_h, "win_width": win_w, "est_pixels": win_h * win_w if win else 0}, "G")
+    # #endregion
 
     if win is not None:
         band_ = src.read(indexes=band, window=win)
@@ -169,6 +189,11 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
 
     lons = array(xs)
     lats = array(ys)
+
+    # #region agent log
+    out_rows = height * width
+    _dbg_log("rast_converter.py:rast_convert_core:exit", "Core exit", {"out_rows": out_rows, "band_nbytes": band_.nbytes if hasattr(band_, "nbytes") else 0}, "G")
+    # #endregion
 
     return DataFrame(
         {
