@@ -37,17 +37,21 @@ def cmap(input: [Series, list], palette: LinearSegmentedColormap | ListedColorma
 
     if var_range is not None:
         if log:
-            m = log1p(var_range[1])
+            min_, m = log1p(var_range)
         else:
-            m = var_range[1]
+            min_, m = var_range
     else:
         m = max(input)
+        min_ = min(input)
 
     l = palette.N
 
     print(f"Max input : {m:.2f}, palette colors : {l}")
 
     if pydeck:
-        return [[int(255 * j) for j in palette(int(x / m * l))] for x in input]
+        return [
+            [int(255 * j) for j in palette(int((x - min_) / (m - min_) * l))]
+            for x in input
+        ]
     else:
-        return [palette(int(x / m * l)) for x in input]
+        return [palette(int((x - min_) / (m - min_) * l)) for x in input]

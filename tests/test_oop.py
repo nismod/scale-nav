@@ -1,20 +1,15 @@
 # %%
-import ibis as ib
-from ibis import selectors as s
-from ibis import _
-
 import h3
-import os
+from ibis import selectors as s
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 import scalenav.oop as snoo
 import scalenav.scale_nav as sn
 
-from tests.test_utils import *
-from tests.test_rast_converter import rast_ingest
+from tests.test_utils import band_var, coords_xy, h3_res, x, y
 
 
 ##############
@@ -35,7 +30,9 @@ def table1_h3(conn):
 
     table1 = conn.create_table(
         "table1",
-        obj=pd.DataFrame({"x": x, "y": y, "band_var": band_var}),
+        # Use the shared deterministic table shape (lon/lat/band_var)
+        # and avoid mutating the global `coords_xy` in tests.
+        obj=coords_xy.copy(),
     )
 
     return snoo.project(table1, res=h3_res)
@@ -43,28 +40,30 @@ def table1_h3(conn):
 
 # %%
 def test_project(table1_h3):
-    coords_xy["h3_id"] = [
+    expected = coords_xy.copy()
+    expected["h3_id"] = [
         h3.latlng_to_cell(lng=x, lat=y, res=h3_res)
-        for (x, y) in zip(coords_xy["lon"], coords_xy["lat"])
+        for (x, y) in zip(expected["lon"], expected["lat"])
     ]
 
     table1_h3_df = table1_h3.execute()
 
     assert "h3_id" in table1_h3_df.columns
-    assert np.all(table1_h3_df["h3_id"] == coords_xy["h3_id"])
+    assert np.all(table1_h3_df["h3_id"] == expected["h3_id"])
 
     # assigning a new resolution to a layer with an 'h3_id' column
     h3_res_reproject = 11
 
-    coords_xy["h3_id"] = [
+    expected2 = coords_xy.copy()
+    expected2["h3_id"] = [
         h3.latlng_to_cell(lng=x, lat=y, res=h3_res_reproject)
-        for (x, y) in zip(coords_xy["lon"], coords_xy["lat"])
+        for (x, y) in zip(expected2["lon"], expected2["lat"])
     ]
 
     table1_h3_overwrite_df = snoo.project(table1_h3, res=h3_res_reproject).execute()
 
     assert "h3_id" in table1_h3_overwrite_df.columns
-    assert np.all(table1_h3_overwrite_df["h3_id"] == coords_xy["h3_id"])
+    assert np.all(table1_h3_overwrite_df["h3_id"] == expected2["h3_id"])
 
     ####### OO setup
 

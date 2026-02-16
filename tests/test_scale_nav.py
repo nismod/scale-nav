@@ -47,7 +47,7 @@ def test_scale_change_down():
     resc_test = pd.DataFrame({"h3_id": h3_id})
     resc_test["vals_var"] = 7
 
-    resc_test_back = conn.create_table("resc_test", resc_test)
+    resc_test_back = conn.create_table("resc_test", obj=resc_test)
 
     for lev in test_levels:
 
