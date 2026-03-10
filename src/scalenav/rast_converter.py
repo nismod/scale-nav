@@ -37,17 +37,34 @@ from pyarrow.parquet import ParquetWriter
 
 from tqdm import tqdm
 
+import resource
+import sys
+
+
 # #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
     try:
-        import resource
-        import sys
+
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
         with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
-            f.write(json.dumps({"location": location, "message": message, "data": data or {}, "rss_mb": round(rss_mb, 2), "hypothesisId": hypothesis_id, "pid": os.getpid()}) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "location": location,
+                        "message": message,
+                        "data": data or {},
+                        "rss_mb": round(rss_mb, 2),
+                        "hypothesisId": hypothesis_id,
+                        "pid": os.getpid(),
+                    }
+                )
+                + "\n"
+            )
     except Exception:
         pass
+
+
 # #endregion
 
 
@@ -168,7 +185,16 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
     # #region agent log
     win_h = getattr(win, "height", 0) if win else 0
     win_w = getattr(win, "width", 0) if win else 0
-    _dbg_log("rast_converter.py:rast_convert_core:entry", "Core entry", {"win_height": win_h, "win_width": win_w, "est_pixels": win_h * win_w if win else 0}, "G")
+    _dbg_log(
+        "rast_converter.py:rast_convert_core:entry",
+        "Core entry",
+        {
+            "win_height": win_h,
+            "win_width": win_w,
+            "est_pixels": win_h * win_w if win else 0,
+        },
+        "G",
+    )
     # #endregion
 
     if win is not None:
@@ -192,7 +218,15 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
 
     # #region agent log
     out_rows = height * width
-    _dbg_log("rast_converter.py:rast_convert_core:exit", "Core exit", {"out_rows": out_rows, "band_nbytes": band_.nbytes if hasattr(band_, "nbytes") else 0}, "G")
+    _dbg_log(
+        "rast_converter.py:rast_convert_core:exit",
+        "Core exit",
+        {
+            "out_rows": out_rows,
+            "band_nbytes": band_.nbytes if hasattr(band_, "nbytes") else 0,
+        },
+        "G",
+    )
     # #endregion
 
     return DataFrame(
@@ -299,6 +333,11 @@ if __name__ == "__main__":
         # 'height': dst_height,
         # 'width': dst_width,
     }
+
+    # # specify custom input crs
+    # if in_crs is not None:
+    #     in_crs = check_out_crs(in_crs)
+    #     vrt
 
     rast_schema = schema(
         [("lon", float32()), ("lat", float32()), ("band_var", float32())]

@@ -33,9 +33,10 @@ jobs:
 
       - name: Install dependencies and build python module
         run: |
-          sudo apt-get install pandoc
+          sudo apt-get update
+          sudo apt-get install -y pandoc
           python -m pip install --upgrade pip wheel flit sphinx myst_nb furo
-          pip install --verbose .[docs]
+          pip install --verbose .
 
       - name: Build docs
         run: |
@@ -43,10 +44,9 @@ jobs:
           make html
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           path: build/html
-          name: website
 
   # Deployment job
   deploy:
