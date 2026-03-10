@@ -568,8 +568,8 @@ def concat(input,**kwargs):
     
     input = {key : val for key,val in input.items() if (val.count()>=1).execute()}
 
-    if all(["h3_id" in tab.columns for tab in list(input.values())]):
-        return ib.union(*list(input.values()),**kwargs)#.group_by("h3_id").agg()
+    # if all(["h3_id" in tab.columns for tab in list(input.values())]):
+    #     return ib.union(*list(input.values()),**kwargs)#.group_by("h3_id").agg()
     return ib.union(*list(input.values()),**kwargs)
 
 
@@ -890,12 +890,18 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
         )
         .rename({"h3_id_temp" : "h3_id"})
         # .drop('h3_id')
-        .pipe(fill_poly,res=res,geometry=alias_geometry)
-        .mutate(h3_id = ib.ifelse(
-            _.h3_id.length()==0,
-            _.h3_id_temp,
-            _.h3_id,
-        ))
+        .pipe(
+            fill_poly,
+            res=res,
+            geometry=alias_geometry
+        )
+        .mutate(
+            h3_id = ib.ifelse(
+                _.h3_id.length()==0,
+                _.h3_id_temp,
+                _.h3_id,
+            )
+        )
     )
 
     res_poly = (
@@ -919,14 +925,26 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
             h3_id_temp= _.h3_id.collect().over(h3_collect_win),
         )
         .rename({"h3_id_temp" : "h3_id"})
-        # .drop("h3_id")
-        .pipe(fill_poly,res=res,geometry=geometry)
+        .pipe(
+            fill_poly,
+            res=res,
+            geometry=geometry
+        )
         .mutate(h3_id = ib.ifelse(
             _.h3_id.length()==0,
             _.h3_id_temp,
             _.h3_id,
         ))
     )
+
+    # print(res_multi.columns)
+    # print(res_poly.columns)
+
+    # print(res_multi)
+    # print(res_poly)
+
+    # print(alias_geometry)
+    # print(geometry)
 
     if keep:
         multipoly_cols = [alias_geometry,"h3_id_temp",]
@@ -963,9 +981,6 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
                     ),
             })
         )
-
-
-
 
 
 def rast_fill_h3(
@@ -1005,12 +1020,15 @@ def rast_fill_h3(
     # print(alias_weight)
     # print(alias_voronoi)
 
-
-    layer_geom_vor = (
+    layer_geom = (
         layer
         .mutate(**{
             alias_geom : _.lon.point(_.lat),
         })
+    )
+
+    layer_geom_vor = (
+        layer_geom
         .select(
             alias_geom
         )
@@ -1020,18 +1038,34 @@ def rast_fill_h3(
         .alias(alias)
         .sql(f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
         """)
-        .mutate(**{alias_voronoi : _[alias_voronoi].intersection(envelope).try_cast("GEOMETRY")})
-        .mutate(**{alias_row_id : ib.row_number()})
+        .mutate(**{
+            alias_voronoi : _[alias_voronoi].intersection(envelope).try_cast("GEOMETRY")
+        })
+        # .mutate(**{
+        #     alias_row_id : ib.row_number()
+        # })
     )
     
+
+    # print(layer_geom)
+    # print(layer_geom_vor)
     
     return_layer = (
-        layer
-        .drop(s.of_type("GEOMETRY"))
-        .mutate(**{alias_row_id : ib.row_number()})
-        .join(layer_geom_vor,predicates=alias_row_id,how='inner')
-        .select(~s.cols(alias_row_id))
-        .pipe(dump_fill_h3,geometry=alias_voronoi,res=res,keep=False)
+        layer_geom
+        # .drop(s.of_type("GEOMETRY"))
+        # .mutate(**{alias_row_id : ib.row_number()})
+        .join(
+            layer_geom_vor,
+            predicates=_[alias_geom].intersects(layer_geom_vor[alias_voronoi]),
+            how='inner'
+        ) # alias_row_id
+        .select(~s.cols(alias_geom))
+        .pipe(
+            dump_fill_h3,
+            geometry=alias_voronoi,
+            res=res,
+            keep=False
+        )
         .mutate(**{
             alias_weight : _.h3_id.length(),
         })
@@ -1039,7 +1073,9 @@ def rast_fill_h3(
         .mutate(**{
             val : _[val]/_[alias_weight] for val in columns
         })
-        .select(~s.cols(alias_weight))
+        .select(
+            ~s.cols(alias_weight)
+        )
     )
 
     if geometry:
