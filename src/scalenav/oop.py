@@ -169,7 +169,6 @@ def head(input : ib.Table,n : int = 5):
     print(input.count())
     print(input.head(n))
 
-
 def connect(database : str = ':memory:',interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [],**kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     For details on the additional parameters, refer to : https://duckdb.org/docs/stable/configuration/overview.html
@@ -681,7 +680,16 @@ def voronoi(layer, limit=10):
         _description_
     """    
     alias = alias_generator()
-    h3_fill = layer.select("h3_id").alias(alias).sql(f"SELECT h3_grid_disk(h3_id,10) as h3_gridded from {alias};").select("h3_gridded").unnest("h3_gridded").distinct()
+    h3_fill = (
+        layer
+        .select("h3_id")
+        .alias(alias)
+        .sql(f"SELECT h3_grid_disk(h3_id,10) as h3_gridded from {alias};")
+        .select("h3_gridded")
+        .unnest("h3_gridded")
+        .distinct()
+    )
+    
     # geom_voronoi = 
     for j in range(limit):
         if h3_fill.count().execute()>0:
@@ -1027,6 +1035,8 @@ def rast_fill_h3(
         })
     )
 
+    # Build the geometries fo hexagons
+    #  
     layer_geom_vor = (
         layer_geom
         .select(
@@ -1059,7 +1069,9 @@ def rast_fill_h3(
             predicates=_[alias_geom].intersects(layer_geom_vor[alias_voronoi]),
             how='inner'
         ) # alias_row_id
-        .select(~s.cols(alias_geom))
+        .select(
+            ~s.cols(alias_geom)
+        )
         .pipe(
             dump_fill_h3,
             geometry=alias_voronoi,
