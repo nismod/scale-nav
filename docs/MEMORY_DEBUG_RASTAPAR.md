@@ -2,80 +2,90 @@
 
 ## Summary
 
-Your suspicions appear **founded**. Several patterns in `rastapar` and its dependencies can cause high memory use on HPC, especially when workers or raster size increase.
+`rastapar` previously OOM-killed on SLURM because Linux workers forked from a parent that had already opened rasters, built a full window list, and held large GDAL state. Peak memory was further amplified by per-window pandas/meshgrid allocations and unbounded GDAL caches in each worker.
+
+These issues have been addressed in the parallel path (`src/scalenav/rast_convert_par.py`):
+
+1. **Minimal prefork footprint** — parent reads metadata only, then closes the raster before starting `ProcessPoolExecutor`.
+2. **Worker-side window sharding** — each worker iterates `block_windows()` and processes `block_index % num_workers == worker_id`.
+3. **Mask-first conversion** — `rast_convert_window_to_batch()` filters nodata/zero pixels before computing coordinates and writes PyArrow `RecordBatch` directly (no pandas in the hot path).
+4. **Bounded GDAL cache** — each worker sets cache via `RASTAPAR_GDAL_CACHE_MB` (default 64 MB) or `--gdal-cache-mb`.
 
 ---
 
-## Hypotheses
+## Root Causes (Historical)
 
-| ID | Hypothesis | Evidence in Code |
-|----|------------|------------------|
-| **A** | Fork inheritance: workers inherit parent memory at spawn | Main process does heavy setup (opens raster, builds full `windows` list) **inside** `with open(src_file) as src:` **before** `ProcessPoolExecutor`. On Unix, workers are forked and inherit the parent's address space (copy-on-write). |
-| **B** | Per-window peak memory: multiple large arrays alive at once | `rast_convert_core` allocates: `band_`, `meshgrid(cols, rows)`, `xs, ys`, `lons, lats`, `DataFrame`, then `RecordBatch.from_pandas` copies again. For a 1024×1024 window, meshgrid alone is ~16 MB (2 × 1024² × 8 bytes). |
-| **C** | DataFrame `inplace=True` drops cause fragmentation / delayed GC | `out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)` creates intermediate boolean masks and index views. `inplace=True` can fragment memory; Python GC may not reclaim promptly. |
-| **D** | GDAL/rasterio per-handle caches multiply with workers | Each worker opens the same raster independently. GDAL block cache, WarpedVRT warp buffers, and rasterio internals are per-handle. With `-w 8`, you get 8× those caches. |
-| **E** | Full `windows` list kept in main process | `windows = [window for _, window in WarpedVRT(src, **vrt_options).block_windows()]` materializes all windows. For large rasters (many blocks), this list is non-trivial and lives until the executor finishes. |
-| **F** | GDAL default cache not tuned for HPC | `GDAL_CACHEMAX` controls block cache. Unset defaults can be large; combined with multiple workers and WarpedVRT, total cache can spike early. |
+| ID | Hypothesis | Status |
+|----|------------|--------|
+| **A** | Fork inheritance: workers inherit parent memory at spawn | **Fixed** — parent no longer holds raster/windows at fork |
+| **B** | Per-window peak memory from meshgrid + DataFrame + from_pandas | **Fixed** in parallel path via `rast_convert_window_to_batch` |
+| **C** | DataFrame `inplace=True` drops cause fragmentation | **Fixed** in parallel path — no pandas filtering |
+| **D** | GDAL/rasterio per-handle caches multiply with workers | **Mitigated** — bounded cache per worker |
+| **E** | Full `windows` list kept in main process | **Fixed** — list removed |
+| **F** | GDAL default cache not tuned for HPC | **Fixed** — `--gdal-cache-mb` / `RASTAPAR_GDAL_CACHE_MB` |
 
 ---
 
-## Why HPC vs Local Differs
+## Why HPC vs Local Differed
 
-- **Larger rasters on HPC** → more blocks, larger windows, more memory per window.
-- **More workers** (`-w`) → more concurrent GDAL handles and caches.
-- **Stricter memory limits** → job killed when RSS exceeds allocation; local machines often have more RAM.
-- **Different filesystem** (e.g. Lustre) → different I/O buffering and caching behavior.
+- **Linux fork vs macOS spawn** — forked workers inherited the parent's RSS; macOS uses spawn with a clean address space.
+- **Stricter memory limits** — SLURM cgroup limits trigger OOM kills; local machines often have more headroom.
+- **Larger production rasters** on HPC increase per-window and per-worker pressure.
+
+---
+
+## SLURM Job Script (Recommended)
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=rastapar
+#SBATCH --mem=16G          # tune to raster size and worker count
+#SBATCH --cpus-per-task=4
+
+export RASTAPAR_GDAL_CACHE_MB=64
+
+rastapar /path/to/raster.tif \
+  --out_path ./out \
+  --workers 4 \
+  --gdal-cache-mb 64
+```
+
+If jobs still OOM:
+
+- Reduce `--workers` (each worker needs peak window memory + GDAL cache).
+- Lower `--gdal-cache-mb` (e.g. 32).
+- Increase `#SBATCH --mem`.
 
 ---
 
 ## Debug Instrumentation
 
-Instrumentation has been added to log:
+Optional NDJSON logging is available when `RASTAPAR_DEBUG_LOG` is set:
 
-- **Main process**: memory and `windows` size before the executor (fork point).
-- **Workers**: entry, before/after `rast_convert_core`, after `writer.write`; window dimensions, DataFrame size, RSS.
-- **rast_convert_core**: window size, output rows, band array size.
+```bash
+export RASTAPAR_DEBUG_LOG=/path/to/debug.log
+rastapar /path/to/raster.tif --out_path ./out --workers 4
+```
 
-Logs are written to `.cursor/debug.log` in NDJSON. Each line includes `rss_mb`, `pid`, `hypothesisId`, and `data`.
-
----
-
-## Reproduction Steps
-
-<reproduction_steps>
-1. Delete any existing `.cursor/debug.log` (or ensure it is cleared before the run).
-2. Run rastapar on a raster that triggers the issue on HPC (or locally with a large raster and `--workers 4` or higher):
-   ```
-   rastapar /path/to/your/raster.tif --out_path ./out --workers 4
-   ```
-3. Let the job run until it completes or is killed by the scheduler (OOM).
-4. If on HPC: copy `.cursor/debug.log` back to your local workspace (or inspect it on the login node).
-5. Proceed so the logs can be analyzed.
-</reproduction_steps>
+Each log line includes `rss_mb`, `pid`, `hypothesisId`, and `data`. Useful for confirming memory stays bounded on the cluster after the fix.
 
 ---
 
-## Mitigations to Try (After Log Analysis)
+## HPC Validation Checklist
 
-1. **Set `GDAL_CACHEMAX`** (e.g. in your job script):
-   ```bash
-   export GDAL_CACHEMAX=256   # MB; tune for your allocation
-   ```
-
-2. **Reduce workers** to lower concurrent GDAL handles and cache use.
-
-3. **Avoid holding full `windows` list**: generate batches lazily and pass only batch iterators; consider `ThreadPoolExecutor` if GIL is not the bottleneck (rasterio/GDAL release it).
-
-4. **Reduce peak memory in `rast_convert_core`**:
-   - Use `arange` with smaller dtypes where possible.
-   - Avoid materializing full meshgrid if you can iterate over indices.
-   - Ensure intermediate arrays are explicitly `del`'d or go out of scope before creating the next large object.
-
-5. **Replace inplace drops** with filtering that returns new DataFrames and lets the old one be collected:
+1. Run the same raster and `--workers` count that previously OOM-killed.
+2. Confirm the job completes without scheduler OOM.
+3. Compare total output row count against a known-good local run:
    ```python
-   out = out[out.band_var != nodata]
-   if not include:
-       out = out[out.band_var > 0]
+   import pyarrow.parquet as pq
+   from pyarrow import concat_tables
+   tables = [pq.read_table(f"out/raster_{i}.parquet") for i in range(num_workers)]
+   total_rows = sum(t.num_rows for t in tables)
    ```
+4. Optionally enable `RASTAPAR_DEBUG_LOG` and verify RSS does not grow unbounded across windows.
 
-6. **Process pool after minimal setup**: move `open(src_file)` and window discovery into workers, or use a smaller prefork footprint (e.g. open, read metadata only, close, then start the pool).
+---
+
+## Sequential CLI Note
+
+The single-process CLI in `src/scalenav/rast_converter.py` still uses `rast_convert_core()` with pandas. Only the parallel `rastapar` entry point uses the optimized batch path.

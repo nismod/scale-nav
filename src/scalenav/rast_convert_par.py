@@ -1,143 +1,108 @@
 # rast_convert_par.py
-import itertools
+import argparse
+import concurrent.futures
+import gc
 import os
-import resource
-import sys
 
+from pyarrow import float32, schema
+from pyarrow.parquet import ParquetWriter
+from rasterio import open
 from rasterio.vrt import WarpedVRT
 
-# #region agent log
-def _dbg_log(location, message, data=None, hypothesis_id=None):
-    try:
-        r = resource.getrusage(resource.RUSAGE_SELF)
-        rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
-        import json
-        with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
-            f.write(json.dumps({"location": location, "message": message, "data": data or {}, "rss_mb": round(rss_mb, 2), "hypothesisId": hypothesis_id, "pid": os.getpid()}) + "\n")
-    except Exception:
-        pass
-# #endregion
-from rasterio.crs import CRS
-from rasterio import open
-
-import numpy as np
-
-import concurrent.futures
-
-from pyarrow import float32, schema, RecordBatch
-from pyarrow.parquet import ParquetWriter
-import pyarrow.compute as pc
-
 from scalenav.rast_converter import (
-    rast_convert_core,
     check_crs,
     check_nodata,
-    check_path,
-    infer_dtype,
     check_out_crs,
+    infer_dtype,
+    rast_convert_window_to_batch,
+    _dbg_log,
 )
 
-from sys import argv
-import argparse
-
-#### input and output options
-
-dst_crs = CRS.from_epsg(4326)
-
-##### Process
+GC_INTERVAL = 50
 
 writer_args = {
     "write_statistics": False,
 }
 
-nodata = 0
-nodata_filter_expr = pc.field("band_var") != nodata
-negative_filter_expr = pc.greater(pc.field("band_var"), 0)
+
+def _configure_gdal_cache():
+    """Bound GDAL block cache per worker to limit memory on HPC."""
+    cache_mb = int(os.environ.get("RASTAPAR_GDAL_CACHE_MB", "64"))
+    try:
+        from osgeo import gdal
+
+        gdal.SetCacheMax(cache_mb * 1024 * 1024)
+    except ImportError:
+        os.environ["GDAL_CACHEMAX"] = str(cache_mb)
 
 
 def process(
+    worker_id: int,
+    num_workers: int,
     out_file: str,
     src_file: str,
-    windows: itertools.batched,
-    rast_schema: dict,
+    rast_schema,
     vrt_options: dict,
     nodata: tuple | float | int,
     include: bool = False,
     band: int = 1,
 ):
-    """This function runs a data ingestion process for a provided set of parameters that come from
+    """Process a shard of raster block windows and write to a parquet file.
 
-    Parameters
-    ----------
-    out_file : str
-        File to write into
-    src_file : str
-        File to read a raster
-    windows : itertools.batched
-        A batch of windows
-    rast_schema : dict
-        The schema of the output table
-    vrt_options : dict
-        Other options for the raster reading step
-    nodata : tuple | float | int
-        No data value of the raster
-    include : bool, optional
-        Whether to include any potential negative values, by default False
-    band : int, optional
-        The band of the input to read from, by default 1
+    Each worker iterates all block windows and processes those assigned to it
+    via ``block_index % num_workers == worker_id``.
     """
-
+    _configure_gdal_cache()
     print("Writing into : ", out_file)
 
-    # #region agent log
-    _dbg_log("rast_convert_par.py:process:entry", "Worker process started", {"out_file": out_file}, "A")
-    # #endregion
+    _dbg_log(
+        "rast_convert_par.py:process:entry",
+        "Worker process started",
+        {"out_file": out_file, "worker_id": worker_id, "num_workers": num_workers},
+        "A",
+    )
+
+    processed = 0
 
     with open(src_file) as src:
-
         with WarpedVRT(src, **vrt_options) as vrt:
-
-            win_transfrom = vrt.window_transform
+            win_transform = vrt.window_transform
 
             with ParquetWriter(
                 where=out_file, schema=rast_schema, **writer_args
             ) as writer:
+                for block_idx, (_, window) in enumerate(vrt.block_windows()):
+                    if block_idx % num_workers != worker_id:
+                        continue
 
-                for window_num, window in enumerate(windows):
-                    # #region agent log
-                    _dbg_log("rast_convert_par.py:process:before_core", "Before rast_convert_core", {"window_num": window_num, "win_height": getattr(window, "height", 0), "win_width": getattr(window, "width", 0)}, "B")
-                    # #endregion
-
-                    out = rast_convert_core(
-                        vrt, transform=win_transfrom, win=window, band=band
+                    batch = rast_convert_window_to_batch(
+                        vrt,
+                        transform=win_transform,
+                        win=window,
+                        rast_schema=rast_schema,
+                        band=band,
+                        nodata=nodata,
+                        include=include,
                     )
-                    # out = out.filter(nodata_filter_expr)
 
-                    # #region agent log
-                    _dbg_log("rast_convert_par.py:process:after_core", "After rast_convert_core", {"window_num": window_num, "df_shape": out.shape, "df_mem_mb": out.memory_usage(deep=True).sum() / 1e6 if hasattr(out, "memory_usage") else 0}, "C")
-                    # #endregion
+                    if batch is not None:
+                        writer.write(batch)
 
-                    out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
+                    processed += 1
+                    if processed % GC_INTERVAL == 0:
+                        gc.collect()
 
-                    if not include:
-                        # out = out.filter(negative_filter_expr)
-                        out.drop(index=out.loc[out.band_var <= 0].index, inplace=True)
-
-                    if out.shape[0] > 0:
-                        writer.write(
-                            # out
-                            RecordBatch.from_pandas(
-                                df=out,
-                                schema=rast_schema,
-                                preserve_index=False,
-                                nthreads=1,
-                            )
-                        )
-                    # #region agent log
-                    _dbg_log("rast_convert_par.py:process:after_write", "After writer.write", {"window_num": window_num}, "D")
-                    # #endregion
-                    # gc.collect()
-                    # del out
+                    _dbg_log(
+                        "rast_convert_par.py:process:after_write",
+                        "Window processed",
+                        {
+                            "block_idx": block_idx,
+                            "processed": processed,
+                            "win_height": getattr(window, "height", 0),
+                            "win_width": getattr(window, "width", 0),
+                        },
+                        "D",
+                    )
 
 
 def rast_converter(args=None):
@@ -153,7 +118,6 @@ def rast_converter(args=None):
     IOError
         If inputs are not properly specified
     """
-
     parser = argparse.ArgumentParser(
         prog="Rast Converter",
         description="Convert rasters to parquet files efficiently",
@@ -221,16 +185,26 @@ def rast_converter(args=None):
         type=int,
     )
 
+    parser.add_argument(
+        "--gdal-cache-mb",
+        nargs="?",
+        default=64,
+        help="GDAL block cache size in MB per worker. Default: %(default)s",
+        type=int,
+    )
+
     args = vars(parser.parse_args(args))
 
-    #### Process parameters
     src_file = args["in_path"]
     out_fold = args["out_path"]
     band = args["band"]
     in_crs = args["in_crs"]
     out_crs = args["out_crs"]
-    include = args["include_negative"]  # exclude non positive values by default
+    include = args["include_negative"]
     num_workers = args["workers"]
+    gdal_cache_mb = args["gdal_cache_mb"]
+
+    os.environ["RASTAPAR_GDAL_CACHE_MB"] = str(gdal_cache_mb)
 
     if out_crs is not None:
         out_crs = check_out_crs(out_crs)
@@ -239,7 +213,6 @@ def rast_converter(args=None):
 
     print("Output CRS : ", str(out_crs))
 
-    # options here : https://rasterio.readthedocs.io/en/stable/api/rasterio.vrt.html#rasterio.vrt.WarpedVRT
     vrt_options = {
         "crs": out_crs,
     }
@@ -247,25 +220,22 @@ def rast_converter(args=None):
     if not os.path.exists(out_fold):
         os.mkdir(out_fold)
 
-    filename = src_file.split("/")[-1].split(".")[0]
-
-    out_files = ""
+    filename = os.path.splitext(os.path.basename(src_file))[0]
 
     with open(src_file) as src:
-
-        # print(src.count)
         if band > src.count:
             raise IOError(
                 "Band parameter exceeds available bands.",
                 "Available bands : ",
                 src.count,
             )
+
         if src.count == 1:
             out_files = [
                 out_fold + "/" + filename + "_" + str(i) + ".parquet"
                 for i in range(num_workers)
             ]
-        elif src.count > 1:
+        else:
             out_files = [
                 out_fold
                 + "/"
@@ -277,7 +247,7 @@ def rast_converter(args=None):
                 + ".parquet"
                 for i in range(num_workers)
             ]
-        # check the source and get the needed info once for user down the road.
+
         src_crs = check_crs(src, in_crs=in_crs)
         vrt_options["src_crs"] = src_crs
 
@@ -286,28 +256,9 @@ def rast_converter(args=None):
         nodata = check_nodata(src)
         print("No data value : ", nodata)
 
-        # windows
-        windows = [
-            window for _, window in WarpedVRT(src, **vrt_options).block_windows()
-        ]
-
-        # #region agent log
-        _dbg_log("rast_convert_par.py:rast_converter:after_windows", "Full windows list built", {"num_windows": len(windows), "num_workers": num_workers}, "E")
-        # #endregion
-
-        # computing individual batch size for each core
-        batch_size = int(np.ceil(len(windows) / (num_workers)))
-        print("Batch size : ", batch_size)
-
-        # dividing into batches
-        batches = itertools.batched(windows, batch_size)
-
-        # inferring the dtype
         band_var_dtype = infer_dtype(src)
-
         print("Variable type infered : ", band_var_dtype)
 
-        # making the raster with the information
         rast_schema = schema(
             [("lon", float32()), ("lat", float32()), ("band_var", band_var_dtype)]
         )
@@ -320,21 +271,31 @@ def rast_converter(args=None):
             }
         )
 
-    # We map the process() function over the list of
-    # windows.
-    # #region agent log
-    _dbg_log("rast_convert_par.py:rast_converter:before_executor", "Right before ProcessPoolExecutor (fork point)", {"num_workers": num_workers, "windows_list_len": len(windows)}, "F")
-    # #endregion
+    _dbg_log(
+        "rast_convert_par.py:rast_converter:before_executor",
+        "Right before ProcessPoolExecutor (fork point)",
+        {"num_workers": num_workers},
+        "F",
+    )
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-        futures = []
-        for w, v, win in zip(out_files, [src_file] * num_workers, batches):
-            futures.append(
-                executor.submit(
-                    process, w, v, win, rast_schema, vrt_options, nodata, include, band
-                )
+        futures = [
+            executor.submit(
+                process,
+                worker_id,
+                num_workers,
+                out_file,
+                src_file,
+                rast_schema,
+                vrt_options,
+                nodata,
+                include,
+                band,
             )
-        # Wait for all tasks to complete
-        concurrent.futures.wait(futures)
+            for worker_id, out_file in enumerate(out_files)
+        ]
+        for future in futures:
+            future.result()
 
 
 if __name__ == "__main__":

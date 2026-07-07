@@ -10,6 +10,8 @@ import os
 from os.path import exists, isdir, isfile
 from re import search
 from glob import glob
+
+import numpy as np
 from numpy import meshgrid, arange, array, nan, dtype
 
 from pandas import DataFrame
@@ -20,6 +22,7 @@ from rasterio import open
 from rasterio.vrt import WarpedVRT
 from rasterio.io import DatasetReader
 from rasterio.crs import CRS
+from rasterio.windows import transform as window_transform
 
 from pyarrow import (
     float32,
@@ -31,6 +34,8 @@ from pyarrow import (
     Table,
     table,
     from_numpy_dtype,
+    RecordBatch,
+    array as pa_array,
 )
 from pyarrow.parquet import ParquetWriter
 
@@ -41,13 +46,15 @@ import resource
 import sys
 
 
-# #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
+    """Write NDJSON debug logs when RASTAPAR_DEBUG_LOG env var is set."""
+    log_path = os.environ.get("RASTAPAR_DEBUG_LOG")
+    if not log_path:
+        return
     try:
-
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
-        with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
+        with open(log_path, "a") as f:
             f.write(
                 json.dumps(
                     {
@@ -63,9 +70,6 @@ def _dbg_log(location, message, data=None, hypothesis_id=None):
             )
     except Exception:
         pass
-
-
-# #endregion
 
 
 def check_path(in_path: str):
@@ -161,6 +165,15 @@ def infer_dtype(source: DatasetReader):
         return float32()
 
 
+def _resolve_transform(transform, win=None):
+    """Resolve a window or dataset transform from a callable or Affine."""
+    if win is None:
+        return transform() if callable(transform) else transform
+    if callable(transform):
+        return transform(win)
+    return window_transform(win, transform)
+
+
 def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
     """The core of the rast conversion can be put here
     in order to centralise the most efficient workflow
@@ -182,28 +195,13 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
     DataFrame | pyarrow.table
         A data frame of the transformed raster window.
     """
-    # #region agent log
-    win_h = getattr(win, "height", 0) if win else 0
-    win_w = getattr(win, "width", 0) if win else 0
-    _dbg_log(
-        "rast_converter.py:rast_convert_core:entry",
-        "Core entry",
-        {
-            "win_height": win_h,
-            "win_width": win_w,
-            "est_pixels": win_h * win_w if win else 0,
-        },
-        "G",
-    )
-    # #endregion
-
     if win is not None:
         band_ = src.read(indexes=band, window=win)
         height = band_.shape[0]
         width = band_.shape[1]
         cols, rows = meshgrid(arange(width), arange(height))
 
-        xs, ys = xy(transform=transform(win), rows=rows, cols=cols)
+        xs, ys = xy(transform=_resolve_transform(transform, win), rows=rows, cols=cols)
 
     else:
         band_ = src.read(indexes=band)
@@ -211,23 +209,10 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
         width = band_.shape[1]
         cols, rows = meshgrid(arange(width), arange(height))
 
-        xs, ys = xy(transform=transform, rows=rows, cols=cols)
+        xs, ys = xy(transform=_resolve_transform(transform), rows=rows, cols=cols)
 
     lons = array(xs)
     lats = array(ys)
-
-    # #region agent log
-    out_rows = height * width
-    _dbg_log(
-        "rast_converter.py:rast_convert_core:exit",
-        "Core exit",
-        {
-            "out_rows": out_rows,
-            "band_nbytes": band_.nbytes if hasattr(band_, "nbytes") else 0,
-        },
-        "G",
-    )
-    # #endregion
 
     return DataFrame(
         {
@@ -235,6 +220,60 @@ def rast_convert_core(src: DatasetReader, transform, win=None, band: int = 1):
             "lon": lons.flatten(),
             "lat": lats.flatten(),
         }
+    )
+
+
+def _valid_pixel_mask(band_: np.ndarray, nodata, include: bool) -> np.ndarray:
+    """Build a boolean mask for pixels that should be written to output."""
+    if np.issubdtype(band_.dtype, np.floating):
+        valid = np.isfinite(band_)
+    else:
+        valid = np.ones(band_.shape, dtype=bool)
+
+    if nodata is not None:
+        if isinstance(nodata, float) and np.isnan(nodata):
+            valid &= ~np.isnan(band_)
+        else:
+            valid &= band_ != nodata
+
+    if not include:
+        valid &= band_ > 0
+
+    return valid
+
+
+def rast_convert_window_to_batch(
+    src: DatasetReader,
+    transform,
+    win,
+    rast_schema,
+    band: int = 1,
+    nodata=0,
+    include: bool = False,
+):
+    """Convert a raster window to a PyArrow RecordBatch with mask-first filtering.
+
+    Filters nodata and non-positive values before computing coordinates so peak
+    memory scales with valid pixel count rather than full window size.
+    """
+    band_ = src.read(indexes=band, window=win)
+    valid = _valid_pixel_mask(band_, nodata, include)
+    rows, cols = np.where(valid)
+
+    if rows.size == 0:
+        return None
+
+    win_transform = _resolve_transform(transform, win)
+    xs, ys = xy(transform=win_transform, rows=rows, cols=cols)
+    band_values = band_[valid]
+
+    return RecordBatch.from_arrays(
+        [
+            pa_array(np.asarray(xs, dtype=np.float32)),
+            pa_array(np.asarray(ys, dtype=np.float32)),
+            pa_array(band_values),
+        ],
+        schema=rast_schema,
     )
 
 
