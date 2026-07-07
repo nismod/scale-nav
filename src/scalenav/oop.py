@@ -303,6 +303,30 @@ def table(
         raise Warning('Table could not be created. Check source file, or connection.')  
 
 
+def coords_columns(input : ib.Table) -> tuple[str,str]:
+
+    col_x = [
+            x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)
+        ]
+        
+    col_y = [
+        x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)
+    ]
+
+    if len(col_x)>1 or len(col_y)>1:
+        raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
+
+    elif len(col_x)==0 or len(col_y)==0:
+        raise IOError("No coordinates column names found, provide explicitly in 'columns' argument.")
+    
+    col_x=col_x[0]
+    col_y=col_y[0]
+
+    print(f"Assuming coordinates columns ('{col_x}','{col_y}')")
+
+    return col_x, col_y
+
+
 def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns,
     return a table with a new column resulting from generating h3 ids for the points at given h3 resolution.
@@ -334,22 +358,24 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
     alias_name = alias_generator()
 
     if columns is None:
-        
-        col_x = [
-            x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)
-        ]
-        
-        col_y = [
-            x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)
-        ]
 
-        if len(col_x)>1 or len(col_y)>1:
-            raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
+        col_x, col_y = coords_columns(input)
         
-        col_x=col_x[0]
-        col_y=col_y[0]
+        # col_x = [
+        #     x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)
+        # ]
+        
+        # col_y = [
+        #     x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)
+        # ]
 
-        print(f"Assuming coordinates columns ('{col_x}','{col_y}')")
+        # if len(col_x)>1 or len(col_y)>1:
+        #     raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
+        
+        # col_x=col_x[0]
+        # col_y=col_y[0]
+
+        # print(f"Assuming coordinates columns ('{col_x}','{col_y}')")
         
     elif type(columns) is tuple and type(columns[0]) is str and type(columns[1]) is str: 
         col_x=columns[0]
@@ -788,16 +814,27 @@ def reduce(table, columns : dict, exclude : bool = True, print_query : bool = Fa
 
     alias = alias_generator()
 
-    all_values = list(chain.from_iterable(columns.values()))
-    
+    all_values = list(set(chain.from_iterable(columns.values())))
+
+    try: 
+        geom_cols = table.select(s.of_type("GEOMETRY")).columns
+    except:
+        geom_cols = []
+
     # if exclude:
     #     exclude_query = f"EXCLUDE ({" ".join(all_values)}) "
     # else:
     #     exclude_query = " "
 
-    reduce_statement = ",".join([" + ".join([val for val in columns[key]]) + f" as {key}" for key in columns.keys()])
+    reduce_statement = ",".join([" + ".join([f'"{alias}"."{val}"' for val in columns[key]]) + f" as {key}" for key in columns.keys()])
     
-    full_query = f"SELECT *, " + reduce_statement + f" FROM {alias};"
+    full_query = f"SELECT *, {reduce_statement} FROM {alias};"
+
+    if len(geom_cols)>0:
+        geom_statement = [f"{val}::GEOMETRY as {val}" for val in geom_cols]
+
+        full_query = f"SELECT *, {",".join(geom_statement)}, {reduce_statement} FROM {alias};"
+
 
     if print_query:
         print("Running query : ", full_query)
