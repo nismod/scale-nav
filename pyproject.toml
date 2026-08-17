@@ -41,9 +41,8 @@ license = { file = "LICENSE.txt" }
 keywords = ['hierarchical index', 'rescaling', 'geospatial']
 
 [project.optional-dependencies]
-dev = ["pytest", "flit"]
-notebooks = ["ipykernel", "pydeck"]
-docs = ["sphinx", "myst-nb", "furo", "sphinx-design"]
+dev = ["flit", "pytest", "ruff"]
+docs = ["furo", "ipykernel", "myst-nb", "pydeck", "sphinx-design", "sphinx"]
 
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"
