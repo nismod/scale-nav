@@ -1,4 +1,4 @@
-"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce 3 column parquet 
+"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce 3 column parquet
 table with coordinates and band value.
 
 See the data_ingestion notebook for templates of this.
@@ -7,44 +7,33 @@ See the data_ingestion notebook for templates of this.
 import argparse
 import json
 import os
-from os.path import exists, isdir, isfile
-from re import search
-from glob import glob
-from numpy import meshgrid, arange, array, nan, dtype
-
-from pandas import DataFrame
-from pyproj import Transformer
-
-from rasterio.transform import xy
-from rasterio import open
-from rasterio.vrt import WarpedVRT
-from rasterio.io import DatasetReader
-from rasterio.crs import CRS
-
-from pyarrow import (
-    float32,
-    float16,
-    schema,
-    field,
-    uint16,
-    table,
-    Table,
-    table,
-    from_numpy_dtype,
-)
-from pyarrow.parquet import ParquetWriter
-
-
-from tqdm import tqdm
-
 import resource
 import sys
+from glob import glob
+from os.path import isdir, isfile
+from re import search
+
+import rasterio
+from numpy import arange, array, dtype, meshgrid
+from pandas import DataFrame
+from pyarrow import (
+    Table,
+    float32,
+    from_numpy_dtype,
+    schema,
+)
+from pyarrow.parquet import ParquetWriter
+from pyproj.exceptions import CRSError
+from rasterio.crs import CRS
+from rasterio.io import DatasetReader
+from rasterio.transform import xy
+from rasterio.vrt import WarpedVRT
+from tqdm import tqdm
 
 
 # #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
     try:
-
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
         with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
@@ -61,7 +50,7 @@ def _dbg_log(location, message, data=None, hypothesis_id=None):
                 )
                 + "\n"
             )
-    except Exception:
+    except (FileNotFoundError, PermissionError):
         pass
 
 
@@ -96,9 +85,8 @@ def check_path(in_path: str):
             in_path if search(pattern=r"(.ti[f]{1,2}$)|(.nc$)", string=in_path) else ""
         )
 
-    if isdir(in_path):
-        if in_path[len(in_path) - 1] != "/":
-            in_path = in_path + "/"
+    if isdir(in_path) and in_path[len(in_path) - 1] != "/":
+        in_path = in_path + "/"
 
     return [
         str(x)
@@ -157,7 +145,7 @@ def infer_dtype(source: DatasetReader):
     np_dtype = source.dtypes[0]
     try:
         return from_numpy_dtype(dtype(np_dtype))  # the numpy function
-    except:
+    except (NotImplementedError, TypeError):
         return float32()
 
 
@@ -254,7 +242,7 @@ def check_out_crs(val):
     """
     try:
         return CRS.from_string(val)
-    except:
+    except CRSError:
         return CRS.from_string("epsg:4326")
 
 
@@ -365,13 +353,13 @@ if __name__ == "__main__":
     # in_paths = check_paths(in_path)
 
     if len(in_paths) == 0:
-        raise IOError("No input files recognised.")
+        raise OSError("No input files recognised.")
 
     # add clock using https://tqdm.github.io/docs/tqdm/
 
     with ParquetWriter(out_path, rast_schema) as writer:
         for path in in_paths:
-            with open(path) as src:
+            with rasterio.open(path) as src:
                 # check the source and get the needed info once for user down the road.
                 src_crs = check_crs(src, in_crs=in_crs)
                 print("Input CRS : ", src_crs)
@@ -379,7 +367,6 @@ if __name__ == "__main__":
                 nodata = check_nodata(src)
                 print("No data value : ", nodata)
                 with WarpedVRT(src, **vrt_options) as vrt:
-
                     # At this point 'vrt' is a full dataset with dimensions,
                     # CRS, and spatial extent matching 'vrt_options'.
                     # Process the dataset in chunks.  Likely not very efficient.
@@ -387,7 +374,6 @@ if __name__ == "__main__":
                     win_transfrom = vrt.window_transform
 
                     for _, window in tqdm(vrt.block_windows()):
-
                         out = rast_convert_core(
                             src=vrt,
                             transform=win_transfrom,

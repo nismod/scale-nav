@@ -1,15 +1,13 @@
+from numpy import all, count_nonzero, log
 from scipy.spatial.distance import jensenshannon
-from sklearn.preprocessing import normalize
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_selection import mutual_info_regression
-
-from numpy import all, log, count_nonzero
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
 
 
 def JS_div(p, q, norm="l1"):
-    if (len(p) == 1) & (len(q) == 1):
-        if all(p != q):
-            return 1
+    if (len(p) == 1) & (len(q) == 1) and all(p != q):
+        return 1
     p = normalize([p], norm=norm)[0]
     q = normalize([q], norm=norm)[0]
     return jensenshannon(p, q, base=2)
@@ -25,6 +23,7 @@ def mutual_information(p, q, norm="l1"):
     p = normalize([p], norm=norm)[0].reshape(1, -1)
     q = normalize([q], norm=norm)[0].reshape(1, -1)
     return mutual_info_regression[0]
+
 
 def CrossEntropy():
     pass
@@ -56,13 +55,12 @@ def jaccard_distance(list1, list2):
 
 
 def spat_entropy(
-    value, 
-    general_vars, 
-    secondary_vars, 
-    general_vars_S_max, 
+    value,
+    general_vars,
+    secondary_vars,
+    general_vars_S_max,
     secondary_vars_S_max,
 ):
-
     non_zero_gen = count_nonzero(value[general_vars])
 
     if non_zero_gen == 0:

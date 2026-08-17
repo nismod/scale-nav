@@ -1,21 +1,18 @@
-from os.path import exists
-from numpy import array, meshgrid, arange, log
-from rasterio.transform import xy
-from rasterio import open
-
-# from rasterio.warp import re
-from geopandas import GeoSeries, GeoDataFrame, read_file
-from shapely.geometry import Point, box, Polygon
-
-# import shapely as shp
-from pandas import Series, concat, DataFrame
-from math import pi, cos
-import h3
-from re import search
-from scalenav.utils import earth_radius_meters, A, alpha
-
 # from overloading import overload
 from functools import singledispatch
+from math import cos, pi
+
+import h3
+
+# from rasterio.warp import re
+from geopandas import GeoDataFrame
+from numpy import log
+
+# import shapely as shp
+from pandas import DataFrame, Series
+from shapely.geometry import Polygon, box
+
+from scalenav.utils import A, alpha, earth_radius_meters
 
 
 @singledispatch
@@ -103,7 +100,6 @@ def rast_to_h3_map(x: float = 0.0, y: float = 51.51, ref: str = "m", dist: float
     res_params = []
 
     if dist > 0:
-
         grid_params = [10, 100, 1000, 5000, 10000, dist]
         grid_params.sort()
 
@@ -167,12 +163,6 @@ rast_to_h3 = rast_to_h3_map(x=0, y=0)
 
 def centre_cell_to_square(h3_cell: str, neighbs: list[tuple[int]]) -> list[str]:
     """If a centroid h3 index is known, return the square cover for a cell and grid_param"""
-
-    sql = """SQL
-    select *, array_value h3_gridded
-    h3_local_ij_to_cell(h3_id,neighbs[:][0],neighbs[:][1])
-    """
-
     ref_cell_ij = h3.cell_to_local_ij(origin=h3_cell, h=h3_cell)
 
     return [

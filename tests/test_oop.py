@@ -1,15 +1,11 @@
 # %%
 import h3
-from ibis import selectors as s
-
 import numpy as np
-import pandas as pd
 import pytest
+from ibis import selectors as s
 
 import scalenav.oop as snoo
 import scalenav.scale_nav as sn
-
-from tests.test_utils import band_var, coords_xy, h3_res, x, y
 
 
 ##############
@@ -23,8 +19,7 @@ def conn():
 
 
 @pytest.fixture
-def table1_h3(conn):
-
+def table1_h3(conn, coords_xy, h3_res):
     # tdata_1 = conn.read_parquet("data/test_data_0.parquet")
     # tdata_1
 
@@ -39,7 +34,7 @@ def table1_h3(conn):
 
 
 # %%
-def test_project(table1_h3):
+def test_project(table1_h3, coords_xy, h3_res):
     expected = coords_xy.copy()
     expected["h3_id"] = [
         h3.latlng_to_cell(lng=x, lat=y, res=h3_res)
