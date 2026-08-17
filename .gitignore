@@ -18,3 +18,5 @@ src/scalenav/model/__pycache__/
 test_memray/
 tests.ipynb
 tests/__pycache__/
+cache
+.ipynb_checkpoints
