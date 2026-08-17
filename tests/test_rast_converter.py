@@ -67,8 +67,7 @@ transforms = [
 ]
 
 filenames = [
-    os.path.join(output_dir, f"raster_{i + 1}.tif")
-    for i in range(len(nodata_values))
+    os.path.join(output_dir, f"raster_{i + 1}.tif") for i in range(len(nodata_values))
 ]
 
 # Generate 6 rasters with different nodata values and transforms

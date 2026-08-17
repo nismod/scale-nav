@@ -12,9 +12,7 @@ from pandas import DataFrame
 from scalenav.utils import child_num, res_lower_limit, res_upper_limit
 
 
-def set_res(
-    grid: DataFrame | GeoDataFrame, final: int = 8
-) -> DataFrame | GeoDataFrame:  # type: ignore
+def set_res(grid: DataFrame | GeoDataFrame, final: int = 8) -> DataFrame | GeoDataFrame:  # type: ignore
     """Similarly to the change_scale function, but sets the resolution to a specific value.
 
     Parameters
