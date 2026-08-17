@@ -42,7 +42,20 @@ keywords = ['hierarchical index', 'rescaling', 'geospatial']
 
 [project.optional-dependencies]
 dev = ["flit", "pytest", "ruff"]
-docs = ["furo", "ipykernel", "myst-nb", "pydeck", "sphinx-design", "sphinx"]
+docs = [
+  "contextily",
+  "folium>=0.12",
+  "furo",
+  "ipykernel",
+  "mapclassify",
+  "myst-nb",
+  "osmnx",
+  "pydeck",
+  "rioxarray",
+  "seaborn",
+  "sphinx-design",
+  "sphinx"
+]
 
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"

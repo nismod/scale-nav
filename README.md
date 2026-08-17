@@ -28,8 +28,42 @@ The package website introduces the use cases and the different functionalities t
 
 ### Rastapar
 
-The command line tool allows for efficient, multi core ingestion of rasters into parquet tables. 
+The command line tool allows for efficient, multi core ingestion of rasters into parquet tables.
 
 ### Scalenav modules
 
 A set of modules provides python functions for performing a operations with data sets expressed as H3 cells. Additionaly, a module with the equivalent high performance functions written with ibis and duckdb.
+
+## Development
+
+We recommend using a virtual environment for development. `python -m venv .venv`
+is sufficient; `env.yaml` is provided to help set up a conda environment;
+otherwise [`uv`](https://docs.astral.sh/uv) is a convenient option (omit the
+`uv run` parts from the following commands if not using `uv`).
+
+Create a virtual environment and install this package, with all optional
+dependencies:
+
+```bash
+uv venv
+uv pip install .[dev,docs]
+```
+
+Run the test suite (with plain Python, or through `uv`) using
+[`pytest`](https://docs.pytest.org/en/stable/index.html)
+
+```bash
+uv run pytest tests
+```
+
+Lint for common problems using [`ruff`](https://docs.astral.sh/ruff/)
+
+```bash
+uv run ruff check
+```
+
+Run auto-formatter using [`ruff`](https://docs.astral.sh/ruff/)
+
+```bash
+uv run ruff format
+```
