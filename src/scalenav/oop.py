@@ -1,16 +1,20 @@
 """Module sketching out the OO backbone. This is intended to reduce the complexity of the user facing side of the workflow by wrapping the underlying functions
-into methods associated to objects that have a defined structure and therefore are more failure robust."""
+into methods associated to objects that have a defined structure and therefore are more failure robust.
+"""
 
 # from pathlib import Path
 import os
-from ibis import table, _
-import ibis.selectors as s
-from ibis.backends.duckdb import *
-import ibis as ib
 import re
-from duckdb import connect as ddb_connect
-from scalenav.utils import *
 from itertools import chain
+
+import ibis as ib
+import ibis.selectors as s
+from duckdb import connect as ddb_connect
+from ibis import _
+from ibis.backends.duckdb import *
+from ibis.common.exceptions import IbisError
+
+from scalenav.utils import alias_generator
 
 configs = {"memory_limit": "500MB"}
 
@@ -61,7 +65,6 @@ class Layer(ib.Table):
         If no column containing h3_ids is present,
         project the data to that resolution.
         """
-        pass
 
     def restore(self):
         """Reloads the original data from the 'src' attribute.
@@ -69,7 +72,6 @@ class Layer(ib.Table):
         been done and information potentially lost.
         Overwrites the current state of the layer ?
         """
-        pass
 
     def add_centr(self):
         return add_centr(self)
@@ -103,15 +105,17 @@ class Layer(ib.Table):
         weight_var: str = "weight_var",
         weight_geom: str = "geometry",
         weight_id: str = "id",
-        keep_left: str = None,
-        keep_right: str = None,
+        keep_left: str | None = None,
+        keep_right: str | None = None,
     ):
         # rescale
         return rescale(
             self, weight, weight_var, weight_geom, weight_id, keep_left, keep_right
         )
 
-    def join(self, table2, predicates: list = ["h3_id"], how="outer"):
+    def join(self, table2, predicates: list | None = None, how="outer"):
+        if predicates is None:
+            predicates = ["h3_id"]
         return join(self, table2, predicates, how)
 
     def constrain(
@@ -171,12 +175,12 @@ class ScalenavProcess(Backend):
             self.do_connect(src_db)
         else:
             print("Creating database at'", src_db, "'.")
-            with connect(src_db) as con:
+            with connect(src_db) as _:
                 pass
             self.do_connect(src_db)
 
         self.raw_sql("""
-        INSTALL spatial; 
+        INSTALL spatial;
         LOAD spatial;
         INSTALL h3 FROM community;
         LOAD h3;
@@ -187,9 +191,10 @@ class ScalenavProcess(Backend):
 
     def export() -> None:
         """Save the underlying duckDB data base in it's current state. It contains the table schemas for future use."""
-        pass
 
-    def combine(self, name: str, layers: dict = {}):
+    def combine(self, name: str, layers: dict | None = None):
+        if layers is None:
+            layers = {}
         return combine(conn=self, name=name, input=layers)
 
     def concat(self, **kwargs):
@@ -211,8 +216,8 @@ def connect(
     database: str = ":memory:",
     interactive: bool = True,
     preload_ext: bool = True,
-    community_ext: list = [],
-    other_ext: list = [],
+    community_ext: list | None = None,
+    other_ext: list | None = None,
     **kwargs,
 ):
     """Create a duckDB connection with spatial and H3 extensions loaded.
@@ -238,6 +243,10 @@ def connect(
         A ibis/duckDB connection object.
 
     """
+    if community_ext is None:
+        community_ext = []
+    if other_ext is None:
+        other_ext = []
 
     ib.options.interactive = interactive
 
@@ -249,13 +258,13 @@ def connect(
         conn = ib.duckdb.connect(database, **kwargs)
     else:
         print("Creating database at '", database, "'.", sep="")
-        with ddb_connect(database, **kwargs) as con:
+        with ddb_connect(database, **kwargs) as _:
             pass
         conn = ib.duckdb.connect(database, **kwargs)
 
     if preload_ext:
         conn.raw_sql("""
-            INSTALL spatial; 
+            INSTALL spatial;
             LOAD spatial;
 
             INSTALL h3 FROM community;
@@ -291,7 +300,7 @@ def table(
     conn,
     name: str,
     path: str,
-    coords=["lon", "lat"],
+    coords: list[str] | None = None,
     unnest: bool = True,
     *args,
     **kwargs,
@@ -323,10 +332,12 @@ def table(
     ibis.Table
         An ibis table object connected to the backend table.
     """
+    if coords is None:
+        coords = ["lon", "lat"]
 
     q_startup = "create"
 
-    if "overwrite" in kwargs.keys():
+    if "overwrite" in kwargs:
         if kwargs["overwrite"]:
             print("Overwriting existing.")
             q_startup = "create or replace"
@@ -334,7 +345,7 @@ def table(
             if name in conn.list_tables():
                 return unnest_h3(conn.table(name))
 
-    if "bbox" in kwargs.keys():
+    if "bbox" in kwargs:
         print("Reading bbox")
         conn.raw_sql(
             f"{q_startup} table {name} as (select * from '{path}' where {coords[0]}>{kwargs['bbox'][0]} AND {coords[0]}<{kwargs['bbox'][2]} AND {coords[1]}>{kwargs['bbox'][1]} AND {coords[1]}<{kwargs['bbox'][3]});"
@@ -344,7 +355,7 @@ def table(
         try:
             conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}');")
             return unnest_h3(conn.table(name))
-        except:
+        except IbisError:
             if name in conn.list_tables():
                 print("Backend table exists, connected.")
                 return unnest_h3(conn.table(name))
@@ -405,7 +416,7 @@ def project(
         ]
 
         if len(col_x) > 1 or len(col_y) > 1:
-            raise IOError(
+            raise OSError(
                 "Ambiguous coordinates column names, provide explicitly in 'columns' argument."
             )
 
@@ -438,7 +449,7 @@ def project(
 
 
 def change_res(
-    input: ib.Table, levels: int = 1, transform_expr: dict = None
+    input: ib.Table, levels: int = 1, transform_expr: dict | None = None
 ) -> ib.Table:
     """Projecting an H3 indexed table through scales in the DuckDB backend.
 
@@ -470,7 +481,7 @@ def change_res(
 
     try:
         levels = int(levels)
-    except:
+    except ValueError:
         raise Warning("levels must be integer.")
 
     # need to be already projected.
@@ -545,11 +556,11 @@ def add_centr(input: ib.Table):
     # generate an alias to expose the tables in the back
     alias_code = alias_generator()
 
-    return input.alias(
-        alias_code
-    ).sql(f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+    return input.alias(alias_code).sql(
+        f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
                     FROM
-                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});""")
+                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});"""
+    )
 
 
 def add_geom(layer, column="h3_id"):
@@ -597,8 +608,8 @@ def rescale(
     weight_var: str = "weight_var",
     weight_geom: str = "geometry",
     weight_id: str = "id",
-    keep_left: str = None,
-    keep_right: str = None,
+    keep_left: str | None = None,
+    keep_right: str | None = None,
 ) -> ib.Table:
     """This function takes two layers, assuming the secong parameter contains the layer with data to downscale. Therefore the first layer is supposed to be spatially more granular.
     It intersects them and rescales the values from the second layer by weighting according to the first layer.
@@ -609,11 +620,11 @@ def rescale(
         input = add_centr(input=input)
 
     if weight_geom not in weight.columns:
-        weight_geom = [
+        weight_geom = next(
             x
             for x in input.select(s.of_type("GEOMETRY")).columns
             if re.search(string=x, pattern="geom")
-        ][0]
+        )
         print("Assuming geometry column ", weight_geom)
 
     if weight_id not in weight.columns:
@@ -710,7 +721,7 @@ def combine(
         name,
         obj=id_col.fill_null({col: fill_val for col in id_col_vars}),
         overwrite=overwrite,
-    )  #
+    )
 
 
 def simplify(
@@ -766,7 +777,6 @@ def constrain(layer, constraint):
     constraint : _type_
         _description_
     """
-    pass
 
 
 def voronoi(layer, limit=10):
@@ -812,7 +822,7 @@ def voronoi(layer, limit=10):
     return layer_int.group_by("h3_id").agg(h3_gridded=_.h3_gridded.collect())
 
 
-def join(table1, table2, predicates: list = ["h3_id"], how="outer"):
+def join(table1, table2, predicates: list | None = None, how="outer"):
     """Nicer way to outer merge two tables than proposed by ibis.
     Essentially remove the double columns corresponding to the original predicates.
 
@@ -832,6 +842,8 @@ def join(table1, table2, predicates: list = ["h3_id"], how="outer"):
     _type_
         _description_
     """
+    if predicates is None:
+        predicates = ["h3_id"]
 
     if how == "inner":
         # if inner do the same.
@@ -912,10 +924,7 @@ def reduce(table, columns: dict, exclude: bool = True, print_query: bool = False
     #     exclude_query = " "
 
     reduce_statement = ",".join(
-        [
-            " + ".join([val for val in columns[key]]) + f" as {key}"
-            for key in columns.keys()
-        ]
+        [" + ".join([val for val in columns[key]]) + f" as {key}" for key in columns]
     )
 
     full_query = "SELECT *, " + reduce_statement + f" FROM {alias};"
@@ -1103,7 +1112,7 @@ def rast_fill_h3(
     envelope,
     res: int = 7,
     geometry: bool = True,
-    columns: list[str] = ["band_var"],
+    columns: list[str] | None = None,
 ):
     """Transform a set of points into a h3 voronoi.
     Usefull for converting rasters where only the centroid is given (ex : outputs of rastapar) into H3 covers.
@@ -1123,9 +1132,10 @@ def rast_fill_h3(
         Whether to return the geometries, by default False
 
     """
+    if columns is None:
+        columns = ["band_var"]
 
     alias = alias_generator()
-    alias_row_id = alias_generator()
     alias_geom = alias_generator()
     alias_weight = alias_generator()
     alias_voronoi = alias_generator()
@@ -1151,8 +1161,10 @@ def rast_fill_h3(
             }
         )
         .alias(alias)
-        .sql(f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
-        """)
+        .sql(
+            f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
+        """
+        )
         .mutate(
             **{
                 alias_voronoi: _[alias_voronoi]

@@ -1,10 +1,8 @@
 
 # data
-import pandas as pd
-
 # import shapely
-
 import ibis as ib
+import pandas as pd
 
 ib.options.interactive = True
 

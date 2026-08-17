@@ -28,31 +28,28 @@ def _dbg_log(location, message, data=None, hypothesis_id=None):
                 )
                 + "\n"
             )
-    except Exception:
+    except (FileNotFoundError, PermissionError):
         pass
 
 
 # #endregion
-from rasterio.crs import CRS
-from rasterio import open
-
-import numpy as np
-
+import argparse
 import concurrent.futures
 
-from pyarrow import float32, schema, RecordBatch
-from pyarrow.parquet import ParquetWriter
+import numpy as np
 import pyarrow.compute as pc
+from pyarrow import RecordBatch, float32, schema
+from pyarrow.parquet import ParquetWriter
+from rasterio import open
+from rasterio.crs import CRS
 
 from scalenav.rast_converter import (
-    rast_convert_core,
     check_crs,
     check_nodata,
-    infer_dtype,
     check_out_crs,
+    infer_dtype,
+    rast_convert_core,
 )
-
-import argparse
 
 #### input and output options
 
@@ -75,7 +72,7 @@ def process(
     windows: itertools.batched,
     rast_schema: dict,
     vrt_options: dict,
-    nodata: tuple | float | int,
+    nodata: tuple | float,
     include: bool = False,
     band: int = 1,
 ):
@@ -112,73 +109,72 @@ def process(
     )
     # #endregion
 
-    with open(src_file) as src:
-        with WarpedVRT(src, **vrt_options) as vrt:
-            win_transfrom = vrt.window_transform
+    with open(src_file) as src, WarpedVRT(src, **vrt_options) as vrt:
+        win_transfrom = vrt.window_transform
 
-            with ParquetWriter(
-                where=out_file, schema=rast_schema, **writer_args
-            ) as writer:
-                for window_num, window in enumerate(windows):
-                    # #region agent log
-                    _dbg_log(
-                        "rast_convert_par.py:process:before_core",
-                        "Before rast_convert_core",
-                        {
-                            "window_num": window_num,
-                            "win_height": getattr(window, "height", 0),
-                            "win_width": getattr(window, "width", 0),
-                        },
-                        "B",
-                    )
-                    # #endregion
+        with ParquetWriter(where=out_file, schema=rast_schema, **writer_args) as writer:
+            for window_num, window in enumerate(windows):
+                # #region agent log
+                _dbg_log(
+                    "rast_convert_par.py:process:before_core",
+                    "Before rast_convert_core",
+                    {
+                        "window_num": window_num,
+                        "win_height": getattr(window, "height", 0),
+                        "win_width": getattr(window, "width", 0),
+                    },
+                    "B",
+                )
+                # #endregion
 
-                    out = rast_convert_core(
-                        vrt, transform=win_transfrom, win=window, band=band
-                    )
-                    # out = out.filter(nodata_filter_expr)
+                out = rast_convert_core(
+                    vrt, transform=win_transfrom, win=window, band=band
+                )
+                # out = out.filter(nodata_filter_expr)
 
-                    # #region agent log
-                    _dbg_log(
-                        "rast_convert_par.py:process:after_core",
-                        "After rast_convert_core",
-                        {
-                            "window_num": window_num,
-                            "df_shape": out.shape,
-                            "df_mem_mb": out.memory_usage(deep=True).sum() / 1e6
+                # #region agent log
+                _dbg_log(
+                    "rast_convert_par.py:process:after_core",
+                    "After rast_convert_core",
+                    {
+                        "window_num": window_num,
+                        "df_shape": out.shape,
+                        "df_mem_mb": (
+                            out.memory_usage(deep=True).sum() / 1e6
                             if hasattr(out, "memory_usage")
-                            else 0,
-                        },
-                        "C",
-                    )
-                    # #endregion
+                            else 0
+                        ),
+                    },
+                    "C",
+                )
+                # #endregion
 
-                    out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
+                out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
 
-                    if not include:
-                        # out = out.filter(negative_filter_expr)
-                        out.drop(index=out.loc[out.band_var <= 0].index, inplace=True)
+                if not include:
+                    # out = out.filter(negative_filter_expr)
+                    out.drop(index=out.loc[out.band_var <= 0].index, inplace=True)
 
-                    if out.shape[0] > 0:
-                        writer.write(
-                            # out
-                            RecordBatch.from_pandas(
-                                df=out,
-                                schema=rast_schema,
-                                preserve_index=False,
-                                nthreads=1,
-                            )
+                if out.shape[0] > 0:
+                    writer.write(
+                        # out
+                        RecordBatch.from_pandas(
+                            df=out,
+                            schema=rast_schema,
+                            preserve_index=False,
+                            nthreads=1,
                         )
-                    # #region agent log
-                    _dbg_log(
-                        "rast_convert_par.py:process:after_write",
-                        "After writer.write",
-                        {"window_num": window_num},
-                        "D",
                     )
-                    # #endregion
-                    # gc.collect()
-                    # del out
+                # #region agent log
+                _dbg_log(
+                    "rast_convert_par.py:process:after_write",
+                    "After writer.write",
+                    {"window_num": window_num},
+                    "D",
+                )
+                # #endregion
+                # gc.collect()
+                # del out
 
 
 def rast_converter(args=None):
@@ -295,7 +291,7 @@ def rast_converter(args=None):
     with open(src_file) as src:
         # print(src.count)
         if band > src.count:
-            raise IOError(
+            raise OSError(
                 "Band parameter exceeds available bands.",
                 "Available bands : ",
                 src.count,

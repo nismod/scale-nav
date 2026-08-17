@@ -1,15 +1,13 @@
+from numpy import all, count_nonzero, log
 from scipy.spatial.distance import jensenshannon
-from sklearn.preprocessing import normalize
-from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_selection import mutual_info_regression
-
-from numpy import all, log, count_nonzero
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
 
 
 def JS_div(p, q, norm="l1"):
-    if (len(p) == 1) & (len(q) == 1):
-        if all(p != q):
-            return 1
+    if (len(p) == 1) & (len(q) == 1) and all(p != q):
+        return 1
     p = normalize([p], norm=norm)[0]
     q = normalize([q], norm=norm)[0]
     return jensenshannon(p, q, base=2)

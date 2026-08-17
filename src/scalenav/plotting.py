@@ -1,7 +1,7 @@
 # plotting.py
-from numpy import max, nan_to_num, log1p
-from pandas import Series
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from numpy import log1p, max, nan_to_num
+from pandas import Series
 from pypalettes import load_cmap
 
 # from pypalettes import
