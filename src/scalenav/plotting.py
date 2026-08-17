@@ -7,7 +7,14 @@ from pypalettes import load_cmap
 # from pypalettes import
 
 
-def cmap(input: [Series, list], palette: LinearSegmentedColormap | ListedColormap | str, log: bool = False, pydeck: bool = True, factorize: bool = False, var_range=None) -> list[int]:  # type: ignore
+def cmap(
+    input: [Series, list],
+    palette: LinearSegmentedColormap | ListedColormap | str,
+    log: bool = False,
+    pydeck: bool = True,
+    factorize: bool = False,
+    var_range=None,
+) -> list[int]:  # type: ignore
     """Provide colormap for deckgl plotting.
 
     Parameters

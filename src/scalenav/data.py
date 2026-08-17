@@ -1,17 +1,13 @@
-from os.path import exists
-from numpy import array, meshgrid, arange, log
-from rasterio.transform import xy
-from rasterio import open
+from numpy import log
 
 # from rasterio.warp import re
-from geopandas import GeoSeries, GeoDataFrame, read_file
-from shapely.geometry import Point, box, Polygon
+from geopandas import GeoDataFrame
+from shapely.geometry import box, Polygon
 
 # import shapely as shp
-from pandas import Series, concat, DataFrame
+from pandas import Series, DataFrame
 from math import pi, cos
 import h3
-from re import search
 from scalenav.utils import earth_radius_meters, A, alpha
 
 # from overloading import overload
@@ -103,7 +99,6 @@ def rast_to_h3_map(x: float = 0.0, y: float = 51.51, ref: str = "m", dist: float
     res_params = []
 
     if dist > 0:
-
         grid_params = [10, 100, 1000, 5000, 10000, dist]
         grid_params.sort()
 

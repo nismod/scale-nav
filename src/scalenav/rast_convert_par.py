@@ -6,16 +6,32 @@ import sys
 
 from rasterio.vrt import WarpedVRT
 
+
 # #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
     try:
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
         import json
+
         with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
-            f.write(json.dumps({"location": location, "message": message, "data": data or {}, "rss_mb": round(rss_mb, 2), "hypothesisId": hypothesis_id, "pid": os.getpid()}) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "location": location,
+                        "message": message,
+                        "data": data or {},
+                        "rss_mb": round(rss_mb, 2),
+                        "hypothesisId": hypothesis_id,
+                        "pid": os.getpid(),
+                    }
+                )
+                + "\n"
+            )
     except Exception:
         pass
+
+
 # #endregion
 from rasterio.crs import CRS
 from rasterio import open
@@ -32,12 +48,10 @@ from scalenav.rast_converter import (
     rast_convert_core,
     check_crs,
     check_nodata,
-    check_path,
     infer_dtype,
     check_out_crs,
 )
 
-from sys import argv
 import argparse
 
 #### input and output options
@@ -90,22 +104,33 @@ def process(
     print("Writing into : ", out_file)
 
     # #region agent log
-    _dbg_log("rast_convert_par.py:process:entry", "Worker process started", {"out_file": out_file}, "A")
+    _dbg_log(
+        "rast_convert_par.py:process:entry",
+        "Worker process started",
+        {"out_file": out_file},
+        "A",
+    )
     # #endregion
 
     with open(src_file) as src:
-
         with WarpedVRT(src, **vrt_options) as vrt:
-
             win_transfrom = vrt.window_transform
 
             with ParquetWriter(
                 where=out_file, schema=rast_schema, **writer_args
             ) as writer:
-
                 for window_num, window in enumerate(windows):
                     # #region agent log
-                    _dbg_log("rast_convert_par.py:process:before_core", "Before rast_convert_core", {"window_num": window_num, "win_height": getattr(window, "height", 0), "win_width": getattr(window, "width", 0)}, "B")
+                    _dbg_log(
+                        "rast_convert_par.py:process:before_core",
+                        "Before rast_convert_core",
+                        {
+                            "window_num": window_num,
+                            "win_height": getattr(window, "height", 0),
+                            "win_width": getattr(window, "width", 0),
+                        },
+                        "B",
+                    )
                     # #endregion
 
                     out = rast_convert_core(
@@ -114,7 +139,18 @@ def process(
                     # out = out.filter(nodata_filter_expr)
 
                     # #region agent log
-                    _dbg_log("rast_convert_par.py:process:after_core", "After rast_convert_core", {"window_num": window_num, "df_shape": out.shape, "df_mem_mb": out.memory_usage(deep=True).sum() / 1e6 if hasattr(out, "memory_usage") else 0}, "C")
+                    _dbg_log(
+                        "rast_convert_par.py:process:after_core",
+                        "After rast_convert_core",
+                        {
+                            "window_num": window_num,
+                            "df_shape": out.shape,
+                            "df_mem_mb": out.memory_usage(deep=True).sum() / 1e6
+                            if hasattr(out, "memory_usage")
+                            else 0,
+                        },
+                        "C",
+                    )
                     # #endregion
 
                     out.drop(index=out.loc[out.band_var == nodata].index, inplace=True)
@@ -134,7 +170,12 @@ def process(
                             )
                         )
                     # #region agent log
-                    _dbg_log("rast_convert_par.py:process:after_write", "After writer.write", {"window_num": window_num}, "D")
+                    _dbg_log(
+                        "rast_convert_par.py:process:after_write",
+                        "After writer.write",
+                        {"window_num": window_num},
+                        "D",
+                    )
                     # #endregion
                     # gc.collect()
                     # del out
@@ -252,7 +293,6 @@ def rast_converter(args=None):
     out_files = ""
 
     with open(src_file) as src:
-
         # print(src.count)
         if band > src.count:
             raise IOError(
@@ -292,7 +332,12 @@ def rast_converter(args=None):
         ]
 
         # #region agent log
-        _dbg_log("rast_convert_par.py:rast_converter:after_windows", "Full windows list built", {"num_windows": len(windows), "num_workers": num_workers}, "E")
+        _dbg_log(
+            "rast_convert_par.py:rast_converter:after_windows",
+            "Full windows list built",
+            {"num_windows": len(windows), "num_workers": num_workers},
+            "E",
+        )
         # #endregion
 
         # computing individual batch size for each core
@@ -323,7 +368,12 @@ def rast_converter(args=None):
     # We map the process() function over the list of
     # windows.
     # #region agent log
-    _dbg_log("rast_convert_par.py:rast_converter:before_executor", "Right before ProcessPoolExecutor (fork point)", {"num_workers": num_workers, "windows_list_len": len(windows)}, "F")
+    _dbg_log(
+        "rast_convert_par.py:rast_converter:before_executor",
+        "Right before ProcessPoolExecutor (fork point)",
+        {"num_workers": num_workers, "windows_list_len": len(windows)},
+        "F",
+    )
     # #endregion
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = []

@@ -10,7 +10,9 @@ from scalenav.utils import res_upper_limit, res_lower_limit, child_num
 from ibis import Table
 
 
-def set_res(grid: [DataFrame, GeoDataFrame], final: int = 8) -> [DataFrame, GeoDataFrame]:  # type: ignore
+def set_res(
+    grid: [DataFrame, GeoDataFrame], final: int = 8
+) -> [DataFrame, GeoDataFrame]:  # type: ignore
     """Similarly to the change_scale function, but sets the resolution to a specific value.
 
     Parameters
@@ -35,8 +37,9 @@ def set_res(grid: [DataFrame, GeoDataFrame], final: int = 8) -> [DataFrame, GeoD
     return change_res(grid=grid, level=levels)
 
 
-def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, GeoDataFrame]:  # type: ignore
-
+def change_res(
+    grid: [DataFrame, GeoDataFrame], level: int = 1
+) -> [DataFrame, GeoDataFrame]:  # type: ignore
     f"""Change scale of a data frame using the H3 hieararchical index. Should any str containing column ( apart from osm_id ) be assumed as a factor ?
     
     Parameters
@@ -88,7 +91,6 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
         return grid
 
     if int(level) == -1:
-
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid = (
             grid.groupby("parent")
@@ -100,7 +102,6 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
         return grid
 
     if int(level) <= -2:
-
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid = (
             grid.groupby("parent")

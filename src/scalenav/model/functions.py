@@ -26,6 +26,7 @@ def mutual_information(p, q, norm="l1"):
     q = normalize([q], norm=norm)[0].reshape(1, -1)
     return mutual_info_regression[0]
 
+
 def CrossEntropy():
     pass
 
@@ -56,13 +57,12 @@ def jaccard_distance(list1, list2):
 
 
 def spat_entropy(
-    value, 
-    general_vars, 
-    secondary_vars, 
-    general_vars_S_max, 
+    value,
+    general_vars,
+    secondary_vars,
+    general_vars_S_max,
     secondary_vars_S_max,
 ):
-
     non_zero_gen = count_nonzero(value[general_vars])
 
     if non_zero_gen == 0:

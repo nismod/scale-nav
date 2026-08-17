@@ -1,15 +1,10 @@
-import re
-import itertools as iter
-import numpy as np
 
 # data
 import pandas as pd
 
 # import shapely
-from scalenav.plotting import cmap
 
 import ibis as ib
-from ibis import _
 
 ib.options.interactive = True
 

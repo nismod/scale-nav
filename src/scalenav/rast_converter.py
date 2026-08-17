@@ -1,4 +1,4 @@
-"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce 3 column parquet 
+"""Conversion of rasters into tables. This module provides a command line tool and a function that both *ingest* a raster file and produce 3 column parquet
 table with coordinates and band value.
 
 See the data_ingestion notebook for templates of this.
@@ -7,13 +7,12 @@ See the data_ingestion notebook for templates of this.
 import argparse
 import json
 import os
-from os.path import exists, isdir, isfile
+from os.path import isdir, isfile
 from re import search
 from glob import glob
-from numpy import meshgrid, arange, array, nan, dtype
+from numpy import meshgrid, arange, array, dtype
 
 from pandas import DataFrame
-from pyproj import Transformer
 
 from rasterio.transform import xy
 from rasterio import open
@@ -23,13 +22,8 @@ from rasterio.crs import CRS
 
 from pyarrow import (
     float32,
-    float16,
     schema,
-    field,
-    uint16,
-    table,
     Table,
-    table,
     from_numpy_dtype,
 )
 from pyarrow.parquet import ParquetWriter
@@ -44,7 +38,6 @@ import sys
 # #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
     try:
-
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
         with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
@@ -379,7 +372,6 @@ if __name__ == "__main__":
                 nodata = check_nodata(src)
                 print("No data value : ", nodata)
                 with WarpedVRT(src, **vrt_options) as vrt:
-
                     # At this point 'vrt' is a full dataset with dimensions,
                     # CRS, and spatial extent matching 'vrt_options'.
                     # Process the dataset in chunks.  Likely not very efficient.
@@ -387,7 +379,6 @@ if __name__ == "__main__":
                     win_transfrom = vrt.window_transform
 
                     for _, window in tqdm(vrt.block_windows()):
-
                         out = rast_convert_core(
                             src=vrt,
                             transform=win_transfrom,
