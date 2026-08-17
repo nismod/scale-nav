@@ -13,7 +13,6 @@ sql/
 pre_pub.sh
 .vscode/
 .coverage
-source/
 src/scalenav/__pycache__/
 src/scalenav/model/__pycache__/
 test_memray/
