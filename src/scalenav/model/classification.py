@@ -1,13 +1,9 @@
-# data
-# import shapely
 import ibis as ib
 import pandas as pd
-
-ib.options.interactive = True
-
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
+ib.options.interactive = True
 #####
 
 light_lm = "all-MiniLM-L6-v2"

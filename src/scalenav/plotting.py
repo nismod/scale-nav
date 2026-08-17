@@ -4,11 +4,9 @@ from numpy import log1p, max, nan_to_num
 from pandas import Series
 from pypalettes import load_cmap
 
-# from pypalettes import
-
 
 def cmap(
-    input: [Series, list],
+    input: Series | list,
     palette: LinearSegmentedColormap | ListedColormap | str,
     log: bool = False,
     pydeck: bool = True,

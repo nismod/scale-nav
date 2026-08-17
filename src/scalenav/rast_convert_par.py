@@ -1,10 +1,27 @@
 # rast_convert_par.py
+import argparse
+import concurrent.futures
 import itertools
+import json
 import os
 import resource
 import sys
 
+import numpy as np
+import pyarrow.compute as pc
+from pyarrow import RecordBatch, float32, schema
+from pyarrow.parquet import ParquetWriter
+from rasterio import open
+from rasterio.crs import CRS
 from rasterio.vrt import WarpedVRT
+
+from scalenav.rast_converter import (
+    check_crs,
+    check_nodata,
+    check_out_crs,
+    infer_dtype,
+    rast_convert_core,
+)
 
 
 # #region agent log
@@ -12,7 +29,6 @@ def _dbg_log(location, message, data=None, hypothesis_id=None):
     try:
         r = resource.getrusage(resource.RUSAGE_SELF)
         rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
-        import json
 
         with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
             f.write(
@@ -33,23 +49,6 @@ def _dbg_log(location, message, data=None, hypothesis_id=None):
 
 
 # #endregion
-import argparse
-import concurrent.futures
-
-import numpy as np
-import pyarrow.compute as pc
-from pyarrow import RecordBatch, float32, schema
-from pyarrow.parquet import ParquetWriter
-from rasterio import open
-from rasterio.crs import CRS
-
-from scalenav.rast_converter import (
-    check_crs,
-    check_nodata,
-    check_out_crs,
-    infer_dtype,
-    rast_convert_core,
-)
 
 #### input and output options
 

@@ -1,5 +1,5 @@
-# test_rast_converter.py
-# this will be a pytest workflow
+import os
+
 import numpy as np
 import pytest
 import rasterio
@@ -18,8 +18,6 @@ from scalenav.rast_converter import (
 output_dir = "data"
 
 # Create the output directory if it doesn't exist
-import os
-
 os.makedirs(output_dir, exist_ok=True)
 
 
