@@ -6,9 +6,7 @@ import numpy as np
 import rasterio
 from rasterio import open
 from rasterio.transform import from_origin
-from rasterio.crs import CRS
 
-from pandas import DataFrame
 
 from scalenav.rast_convert_par import process
 from scalenav.rast_converter import (
@@ -71,7 +69,8 @@ transforms = [
 ]
 
 filenames = [
-    os.path.join(output_dir, f"raster_{i+1}.tif") for i in range(0, len(nodata_values))
+    os.path.join(output_dir, f"raster_{i + 1}.tif")
+    for i in range(0, len(nodata_values))
 ]
 
 # Generate 6 rasters with different nodata values and transforms
@@ -97,7 +96,6 @@ def raw_files():
 
 @pytest.fixture(scope="session")
 def rast_ingest(tmp_path_factory: pytest.TempPathFactory):
-
     files = raw_files()
 
     for i, file in enumerate(files):

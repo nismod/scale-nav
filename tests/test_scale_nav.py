@@ -5,16 +5,15 @@
 # setup some `fixtures` to make the sample data.
 
 import h3
+import numpy as np
+import pandas as pd
 import scalenav.scale_nav as sn
 import scalenav.data as sd
 import scalenav.oop as snoo
 import itertools as iter
-import ibis as ib
-from tests.test_utils import *
 
 
-def test_project_on_grid():
-
+def test_project_on_grid(coords_xy, h3_res):
     bench = [
         h3.latlng_to_cell(lng=x, lat=y, res=h3_res)
         for (x, y) in zip(coords_xy["lon"], coords_xy["lat"])
@@ -24,8 +23,7 @@ def test_project_on_grid():
     assert res == bench
 
 
-def test_change_scale_xy():
-
+def test_change_scale_xy(coords_xy, h3_res, band_var):
     res_h3 = sd.df_project_on_grid(coords_xy, res=h3_res)
 
     bench = list(iter.chain.from_iterable([[x / 7] * 7 for x in band_var]))
@@ -35,8 +33,7 @@ def test_change_scale_xy():
     assert res["band_var"].to_list() == bench, ""
 
 
-def test_scale_change_down():
-
+def test_scale_change_down(x, y):
     conn = snoo.connect()
 
     test_start_res = 7
@@ -50,7 +47,6 @@ def test_scale_change_down():
     resc_test_back = conn.create_table("resc_test", obj=resc_test)
 
     for lev in test_levels:
-
         res_pd = sn.change_res(resc_test, lev)
         # generating the data set with the new
         res_ib = snoo.change_res(resc_test_back, lev)
