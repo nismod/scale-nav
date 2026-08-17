@@ -1,19 +1,17 @@
 # test_rast_converter.py
 # this will be a pytest workflow
-import pytest
 import numpy as np
-
+import pytest
 import rasterio
 from rasterio import open
 from rasterio.transform import from_origin
 
-
 from scalenav.rast_convert_par import process
 from scalenav.rast_converter import (
-    rast_convert_core,
-    check_nodata,
     check_crs,
+    check_nodata,
     check_path,
+    rast_convert_core,
 )
 
 # Directory to save rasters
@@ -70,7 +68,7 @@ transforms = [
 
 filenames = [
     os.path.join(output_dir, f"raster_{i + 1}.tif")
-    for i in range(0, len(nodata_values))
+    for i in range(len(nodata_values))
 ]
 
 # Generate 6 rasters with different nodata values and transforms

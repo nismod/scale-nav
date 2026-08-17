@@ -4,13 +4,15 @@
 
 # setup some `fixtures` to make the sample data.
 
+import itertools as iter
+
 import h3
 import numpy as np
 import pandas as pd
-import scalenav.scale_nav as sn
+
 import scalenav.data as sd
 import scalenav.oop as snoo
-import itertools as iter
+import scalenav.scale_nav as sn
 
 
 def test_project_on_grid(coords_xy, h3_res):

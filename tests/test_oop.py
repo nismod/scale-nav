@@ -1,9 +1,8 @@
 # %%
 import h3
-from ibis import selectors as s
-
 import numpy as np
 import pytest
+from ibis import selectors as s
 
 import scalenav.oop as snoo
 import scalenav.scale_nav as sn
