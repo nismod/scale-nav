@@ -54,16 +54,17 @@ def spat_entropy(
 
     non_zero_gen = count_nonzero(value[general_vars])
 
-    if non_zero_gen == 0:
+    if non_zero_gen == 0 or general_vars_S_max == 0:
         general_vars_S = 0
     else:
         general_vars_S = 1 - (log(non_zero_gen) / general_vars_S_max)
+
 
     non_zero_sec = count_nonzero(value[secondary_vars])
 
     # if non_zero_sec==0 and non_zero_gen==0:
     #     return 0
-    if non_zero_sec == 0:
+    if non_zero_sec == 0 or secondary_vars_S_max == 0:
         secondary_vars_S = 1
     else:
         secondary_vars_S = log(non_zero_sec) / secondary_vars_S_max

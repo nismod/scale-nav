@@ -7,7 +7,7 @@
 These issues have been addressed in the parallel path (`src/scalenav/rast_convert_par.py`):
 
 1. **Minimal prefork footprint** — parent reads metadata only, then closes the raster before starting `ProcessPoolExecutor`.
-2. **Worker-side window sharding** — each worker iterates `block_windows()` and processes `block_index % num_workers == worker_id`.
+2. **Spatial worker sharding** — each worker derives one compact rectangular region of the warped raster's block grid and reads only that region with `block_window()`.
 3. **Mask-first conversion** — `rast_convert_window_to_batch()` filters nodata/zero pixels before computing coordinates and writes PyArrow `RecordBatch` directly (no pandas in the hot path).
 4. **Bounded GDAL cache** — each worker sets cache via `RASTAPAR_GDAL_CACHE_MB` (default 64 MB) or `--gdal-cache-mb`.
 
@@ -21,7 +21,7 @@ These issues have been addressed in the parallel path (`src/scalenav/rast_conver
 | **B** | Per-window peak memory from meshgrid + DataFrame + from_pandas | **Fixed** in parallel path via `rast_convert_window_to_batch` |
 | **C** | DataFrame `inplace=True` drops cause fragmentation | **Fixed** in parallel path — no pandas filtering |
 | **D** | GDAL/rasterio per-handle caches multiply with workers | **Mitigated** — bounded cache per worker |
-| **E** | Full `windows` list kept in main process | **Fixed** — list removed |
+| **E** | Full `windows` list kept in main process | **Fixed** — only metadata is read in the parent; each worker calculates an `O(workers)` region map after opening its VRT |
 | **F** | GDAL default cache not tuned for HPC | **Fixed** — `--gdal-cache-mb` / `RASTAPAR_GDAL_CACHE_MB` |
 
 ---
@@ -67,7 +67,7 @@ export RASTAPAR_DEBUG_LOG=/path/to/debug.log
 rastapar /path/to/raster.tif --out_path ./out --workers 4
 ```
 
-Each log line includes `rss_mb`, `pid`, `hypothesisId`, and `data`. Useful for confirming memory stays bounded on the cluster after the fix.
+Each log line includes `rss_mb`, `pid`, `hypothesisId`, and `data`. Worker logs also include the assigned half-open block bounds (`row_start`, `row_stop`, `col_start`, `col_stop`) and each processed block row and column. This is useful for confirming both bounded memory and spatially coherent output on the cluster.
 
 ---
 
@@ -83,6 +83,7 @@ Each log line includes `rss_mb`, `pid`, `hypothesisId`, and `data`. Useful for c
    total_rows = sum(t.num_rows for t in tables)
    ```
 4. Optionally enable `RASTAPAR_DEBUG_LOG` and verify RSS does not grow unbounded across windows.
+5. Verify each worker's logged block bounds form one rectangle and that the regions cover the block grid without overlap.
 
 ---
 

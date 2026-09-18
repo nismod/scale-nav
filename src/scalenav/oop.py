@@ -462,6 +462,31 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
             .agg(**transform_expr)
 )
 
+
+def coords_columns(input : ib.Table):
+    """Identify the coordinates columns in a table.
+    
+    Parameters
+    ---------------
+    input : ibis.Table
+        A table in the scalenav database.
+
+    Returns
+    ---------------
+    tuple[str,str]
+        A tuple containing the names of the coordinates columns.
+    """
+    x_col = [x for x in input.columns if re.search(string=x,pattern=r"(^lon)|(^lng)|(^x)|(^east)",flags=re.IGNORECASE)]
+    y_col = [x for x in input.columns if re.search(string=x,pattern=r"(^lat)|(^ltd)|(^y)|(^north)",flags=re.IGNORECASE)]
+
+    if len(x_col)>1 or len(y_col)>1:
+        raise IOError("Ambiguous coordinates column names, provide explicitly in 'columns' argument.")
+    
+    x_col = x_col[0]
+    y_col = y_col[0]
+
+    return x_col, y_col
+
 def add_centr(input : ib.Table):
     """Add the centroid of a hex cell in the table expression.
     

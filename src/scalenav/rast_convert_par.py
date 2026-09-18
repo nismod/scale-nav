@@ -3,6 +3,8 @@ import argparse
 import concurrent.futures
 import gc
 import os
+from dataclasses import dataclass
+from fractions import Fraction
 
 from pyarrow import float32, schema
 from pyarrow.parquet import ParquetWriter
@@ -23,6 +25,160 @@ GC_INTERVAL = 50
 writer_args = {
     "write_statistics": False,
 }
+
+
+@dataclass(frozen=True)
+class _BlockRegion:
+    """A rectangular, half-open region of a raster's block grid."""
+
+    row_start: int
+    row_stop: int
+    col_start: int
+    col_stop: int
+
+    @property
+    def row_count(self) -> int:
+        return self.row_stop - self.row_start
+
+    @property
+    def col_count(self) -> int:
+        return self.col_stop - self.col_start
+
+
+def _split_block_region(
+    region: _BlockRegion,
+    worker_count: int,
+    block_height: int,
+    block_width: int,
+) -> list[_BlockRegion]:
+    """Recursively split a block region into compact worker regions."""
+    block_count = region.row_count * region.col_count
+    if worker_count < 1 or worker_count > block_count:
+        raise ValueError("worker count must fit within the block region")
+    if worker_count == 1:
+        return [region]
+
+    can_split_rows = region.row_count > 1
+    can_split_cols = region.col_count > 1
+    split_rows = can_split_rows and (
+        not can_split_cols
+        or region.row_count * block_height >= region.col_count * block_width
+    )
+
+    axis_length = region.row_count if split_rows else region.col_count
+    cross_length = region.col_count if split_rows else region.row_count
+    candidates = []
+    for candidate_workers in range(1, worker_count):
+        # Try both integer cuts around the ideal proportional position.
+        cut_floor = axis_length * candidate_workers // worker_count
+        cut_ceil = (
+            axis_length * candidate_workers + worker_count - 1
+        ) // worker_count
+        for candidate_cut in {cut_floor, cut_ceil}:
+            if candidate_cut < 1 or candidate_cut >= axis_length:
+                continue
+
+            first_block_count = candidate_cut * cross_length
+            second_block_count = block_count - first_block_count
+            second_workers = worker_count - candidate_workers
+            if (
+                candidate_workers > first_block_count
+                or second_workers > second_block_count
+            ):
+                continue
+
+            per_worker_imbalance = Fraction(
+                abs(
+                    first_block_count * second_workers
+                    - second_block_count * candidate_workers
+                ),
+                candidate_workers * second_workers,
+            )
+            candidates.append(
+                (
+                    per_worker_imbalance,
+                    abs(candidate_workers - second_workers),
+                    abs(axis_length - 2 * candidate_cut),
+                    candidate_cut,
+                    candidate_workers,
+                )
+            )
+
+    if not candidates:
+        raise RuntimeError("could not split a populated block region")
+
+    _, _, _, cut_at, first_workers = min(candidates)
+    second_workers = worker_count - first_workers
+
+    if split_rows:
+        split_at = region.row_start + cut_at
+        first = _BlockRegion(
+            region.row_start,
+            split_at,
+            region.col_start,
+            region.col_stop,
+        )
+        second = _BlockRegion(
+            split_at,
+            region.row_stop,
+            region.col_start,
+            region.col_stop,
+        )
+    else:
+        split_at = region.col_start + cut_at
+        first = _BlockRegion(
+            region.row_start,
+            region.row_stop,
+            region.col_start,
+            split_at,
+        )
+        second = _BlockRegion(
+            region.row_start,
+            region.row_stop,
+            split_at,
+            region.col_stop,
+        )
+
+    return _split_block_region(
+        first, first_workers, block_height, block_width
+    ) + _split_block_region(second, second_workers, block_height, block_width)
+
+
+def _partition_block_grid(
+    block_rows: int,
+    block_cols: int,
+    num_workers: int,
+    block_height: int = 1,
+    block_width: int = 1,
+) -> list[_BlockRegion | None]:
+    """Assign compact, deterministic block regions to workers.
+
+    Workers in excess of the number of blocks receive ``None`` so callers can
+    still create the requested number of output files.
+    """
+    if num_workers < 1:
+        raise ValueError("num_workers must be at least 1")
+    if block_rows < 1 or block_cols < 1:
+        raise ValueError("block grid dimensions must be at least 1")
+    if block_height < 1 or block_width < 1:
+        raise ValueError("block dimensions must be at least 1")
+
+    active_workers = min(num_workers, block_rows * block_cols)
+    regions = _split_block_region(
+        _BlockRegion(0, block_rows, 0, block_cols),
+        active_workers,
+        block_height,
+        block_width,
+    )
+    regions.sort(
+        key=lambda region: (
+            region.row_start,
+            region.col_start,
+            region.row_stop,
+            region.col_stop,
+        )
+    )
+    return regions + [None] * (num_workers - active_workers)
 
 
 def _configure_gdal_cache():
@@ -47,11 +203,12 @@ def process(
     include: bool = False,
     band: int = 1,
 ):
-    """Process a shard of raster block windows and write to a parquet file.
+    """Process one spatial block region and write it to a parquet file."""
+    if num_workers < 1:
+        raise ValueError("num_workers must be at least 1")
+    if worker_id < 0 or worker_id >= num_workers:
+        raise ValueError("worker_id must identify one of num_workers")
 
-    Each worker iterates all block windows and processes those assigned to it
-    via ``block_index % num_workers == worker_id``.
-    """
     _configure_gdal_cache()
     print("Writing into : ", out_file)
 
@@ -67,42 +224,76 @@ def process(
     with open(src_file) as src:
         with WarpedVRT(src, **vrt_options) as vrt:
             win_transform = vrt.window_transform
+            block_height, block_width = vrt.block_shapes[band - 1]
+            block_rows = (vrt.height + block_height - 1) // block_height
+            block_cols = (vrt.width + block_width - 1) // block_width
+            region = _partition_block_grid(
+                block_rows,
+                block_cols,
+                num_workers,
+                block_height,
+                block_width,
+            )[worker_id]
+
+            region_data = None
+            if region is not None:
+                region_data = {
+                    "row_start": region.row_start,
+                    "row_stop": region.row_stop,
+                    "col_start": region.col_start,
+                    "col_stop": region.col_stop,
+                }
+            _dbg_log(
+                "rast_convert_par.py:process:region",
+                "Spatial block region assigned",
+                {
+                    "worker_id": worker_id,
+                    "block_rows": block_rows,
+                    "block_cols": block_cols,
+                    "region": region_data,
+                },
+                "S",
+            )
 
             with ParquetWriter(
                 where=out_file, schema=rast_schema, **writer_args
             ) as writer:
-                for block_idx, (_, window) in enumerate(vrt.block_windows()):
-                    if block_idx % num_workers != worker_id:
-                        continue
+                if region is None:
+                    return
 
-                    batch = rast_convert_window_to_batch(
-                        vrt,
-                        transform=win_transform,
-                        win=window,
-                        rast_schema=rast_schema,
-                        band=band,
-                        nodata=nodata,
-                        include=include,
-                    )
+                for block_row in range(region.row_start, region.row_stop):
+                    for block_col in range(region.col_start, region.col_stop):
+                        window = vrt.block_window(band, block_row, block_col)
 
-                    if batch is not None:
-                        writer.write(batch)
+                        batch = rast_convert_window_to_batch(
+                            vrt,
+                            transform=win_transform,
+                            win=window,
+                            rast_schema=rast_schema,
+                            band=band,
+                            nodata=nodata,
+                            include=include,
+                        )
 
-                    processed += 1
-                    if processed % GC_INTERVAL == 0:
-                        gc.collect()
+                        if batch is not None:
+                            writer.write(batch)
 
-                    _dbg_log(
-                        "rast_convert_par.py:process:after_write",
-                        "Window processed",
-                        {
-                            "block_idx": block_idx,
-                            "processed": processed,
-                            "win_height": getattr(window, "height", 0),
-                            "win_width": getattr(window, "width", 0),
-                        },
-                        "D",
-                    )
+                        processed += 1
+                        if processed % GC_INTERVAL == 0:
+                            gc.collect()
+
+                        _dbg_log(
+                            "rast_convert_par.py:process:after_write",
+                            "Window processed",
+                            {
+                                "block_row": block_row,
+                                "block_col": block_col,
+                                "processed": processed,
+                                "win_height": getattr(window, "height", 0),
+                                "win_width": getattr(window, "width", 0),
+                            },
+                            "D",
+                        )
 
 
 def rast_converter(args=None):
@@ -203,6 +394,9 @@ def rast_converter(args=None):
     include = args["include_negative"]
     num_workers = args["workers"]
     gdal_cache_mb = args["gdal_cache_mb"]
+
+    if num_workers < 1:
+        parser.error("--workers must be at least 1")
 
     os.environ["RASTAPAR_GDAL_CACHE_MB"] = str(gdal_cache_mb)
 
