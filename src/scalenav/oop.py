@@ -753,10 +753,19 @@ def join(table1,table2,predicates : list = ["h3_id"],how="outer"):
         return ib.join(table1,table2,predicates=predicates,how="inner")
     # otherwise do this
     return (
-        ib.join(table1,table2,predicates=predicates,how=how)
-        .mutate(**{val : ib.ifelse(_[val].isnull(),_[val + "_right"],_[val]) for val in predicates})
-        .select(~s.cols(*[f"{val}_right" for val in predicates]))
-        ) 
+        ib.join(
+            table1,
+            table2,
+            predicates=predicates,
+            how=how,
+        )
+        .mutate(**{
+            val : ib.ifelse(_[val].isnull(),_[val + "_right"],_[val]) for val in predicates
+        })
+        .select(
+            ~s.cols(*[f"{val}_right" for val in predicates])
+        )
+    ) 
 
 
 def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
