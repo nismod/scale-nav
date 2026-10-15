@@ -1,16 +1,30 @@
-import numpy as np
 import geopandas as gpd
 import pandas as pd
 
 ## size of table
-size = 10
 h3_res = 10
 
-x = np.random.uniform(low=-180, high=180, size=size).tolist()
+# Fixed lon/lat so H3 ids are reproducible. The first two points are centroids
+# of sibling res-10 cells that share a parent at res-9 (Oxford area).
+x = [
+    -1.2581133271935658,  # Oxford sibling A
+    -1.2574742473233895,  # Oxford sibling B (same parent as A)
+    -0.1278,  # London
+    0.1218,  # Cambridge
+    -0.9781,  # Reading
+    -2.2426,  # Manchester
+]
 
-y = np.random.uniform(low=-90, high=90, size=size).tolist()
+y = [
+    51.75364443360959,
+    51.752539103469246,
+    51.5074,
+    52.2053,
+    51.4543,
+    53.4808,
+]
 
-band_var = np.random.exponential(scale=5, size=size).tolist()
+band_var = [7.0, 14.0, 21.0, 28.0, 35.0, 42.0]
 
 coords_geom = gpd.GeoDataFrame(
     data={"band_var": band_var},

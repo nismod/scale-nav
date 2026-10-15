@@ -235,11 +235,9 @@ def connect(database : str = ':memory:',interactive : bool = True, preload_ext :
 
 
 def unnest_h3(table):
-    if "h3_id" in table.columns:
-        if "h3_id" in table.select(s.of_type("array")).columns:
-            return table.unnest("h3_id").mutate(band_var=1)
-    else :
-        return table
+    if "h3_id" in table.columns and table["h3_id"].type().is_array():
+        return table.unnest("h3_id").mutate(band_var=1)
+    return table
 
 def table(
     conn, 
@@ -506,7 +504,7 @@ def add_centr(input : ib.Table):
 
     return (input
             .alias(alias_code)
-            .sql(f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+            .sql(f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1])::GEOMETRY as geom
                     FROM
                         (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});""")
 )
@@ -631,6 +629,10 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
             id_col = id_col.join(tab,how="left",predicates="h3_id",rname=f"{nam}_{{{'name'}}}_var").drop(s.matches("h3_id_var"))
     
     id_col_vars = id_col.select(s.matches("_var$")).columns
+
+    if overwrite:
+        conn.raw_sql(f'DROP TABLE IF EXISTS "{name}"')
+        overwrite = False
 
     return conn.create_table(name,obj=id_col.fill_null({col : fill_val for col in id_col_vars}),overwrite=overwrite)#
 
@@ -797,7 +799,7 @@ def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
         colname = f"h3_id_{k}nn"
     knn_alias = alias_generator()
     return input.alias(knn_alias).sql(f"""
-    Select *, h3_grid_disk(h3_id,{k}) as {colname} from h3_disk;
+    Select *, h3_grid_disk(h3_id,{k}) as {colname} from {knn_alias};
     """)
 
 

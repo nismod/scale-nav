@@ -1,0 +1,16 @@
+name: scale-nav
+channels:
+- conda-forge
+dependencies:
+- gdal
+- geopandas
+- ibis-duckdb
+- ipykernel
+- matplotlib
+- osmnx
+- pip
+- polars
+- pydeck
+- seaborn
+- shapely
+

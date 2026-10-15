@@ -5,11 +5,16 @@
 # setup some `fixtures` to make the sample data.
 
 import h3
-import scalenav.scale_nav as sn
+import itertools as iter
+
+import numpy as np
+import pandas as pd
+
 import scalenav.data as sd
 import scalenav.oop as snoo
-import itertools as iter
-import ibis as ib
+import scalenav.scale_nav as sn
+
+from tests.conftest import table_from_df
 from tests.test_utils import *
 
 
@@ -42,12 +47,16 @@ def test_scale_change_down():
     test_start_res = 7
     test_levels = [1, 3]
 
-    h3_id = [h3.latlng_to_cell(y, x, res=test_start_res) for (x, y) in zip(x, y)]
+    h3_id = list(
+        dict.fromkeys(
+            h3.latlng_to_cell(y, x, res=test_start_res) for (x, y) in zip(x, y)
+        )
+    )
 
     resc_test = pd.DataFrame({"h3_id": h3_id})
     resc_test["vals_var"] = 7
 
-    resc_test_back = conn.create_table("resc_test", obj=resc_test)
+    resc_test_back = table_from_df(conn, "resc_test", resc_test)
 
     for lev in test_levels:
 
