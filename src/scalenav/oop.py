@@ -170,7 +170,7 @@ def head(input : ib.Table,n : int = 5):
     print(input.head(n))
 
 
-def connect(database : str = ':memory:',interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [],**kwargs):
+def connect(database : str = ':memory:', interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [], **kwargs):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     For details on the additional parameters, refer to : https://duckdb.org/docs/stable/configuration/overview.html
 
@@ -372,7 +372,7 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
         return input.alias(alias_name).sql(f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
 
 
-def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -> ib.Table :
+def change_res(input : ib.Table,levels : int = 1,transform_expr : dict | str | None = None) -> ib.Table :
     """Projecting an H3 indexed table through scales in the DuckDB backend.
         
         Parameters
@@ -621,6 +621,7 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
         An ibis table which is an outer merge of all the provided tables
 
     """    
+    
     id_col = ib.union(*[tab.select("h3_id") for tab in list(input.values())],distinct=True)
     
     for (nam,tab) in input.items():
