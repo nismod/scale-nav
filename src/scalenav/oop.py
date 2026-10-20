@@ -1,108 +1,151 @@
 """Module sketching out the OO backbone. This is intended to reduce the complexity of the user facing side of the workflow by wrapping the underlying functions
-into methods associated to objects that have a defined structure and therefore are more failure robust."""
+into methods associated to objects that have a defined structure and therefore are more failure robust.
+"""
 
 # from pathlib import Path
-import os 
-from ibis import table,to_sql,_,duckdb
-import ibis.selectors as s
-from ibis.backends.duckdb import *
-import ibis as ib
+import os
 import re
-from numpy import random,all,unique
-from duckdb import connect as ddb_connect
-from scalenav.utils import *
 from itertools import chain
 
-configs = {
-    "memory_limit" : "500MB"
-}
+import ibis as ib
+import ibis.selectors as s
+from duckdb import connect as ddb_connect
+from ibis import _
+from ibis.backends.duckdb import *
+from ibis.common.exceptions import IbisError
+
+from scalenav.utils import alias_generator
+
+configs = {"memory_limit": "500MB"}
 
 ################
 
-class Layer(ib.Table): 
 
-    res : int
-    src : str
+class Layer(ib.Table):
+    res: int
+    src: str
 
-    def __init__(self, name : str = "", src : str = "") -> None:
-        """Validation of the input source goes here. What is the schema ? """
-        
+    def __init__(self, name: str = "", src: str = "") -> None:
+        """Validation of the input source goes here. What is the schema ?"""
+
         super().__init__()
 
         self.src = src
-    
+
     def _factory(self, expr):
         # Override the factory to return Layer
         return Layer(expr)
 
-    def project(self, resolution : int = 10, columns : tuple[str] = ("lon","lat"),**kwargs) -> None: # type: ignore
-        """Project the data onto the h3 grid at the given resolution. 
+    def project(
+        self, resolution: int = 10, columns: tuple[str] = ("lon", "lat"), **kwargs
+    ) -> None:  # type: ignore
+        """Project the data onto the h3 grid at the given resolution.
         The column containing the spatial variables to use can be provided
         as argument in the sptaial_var paramater if it is not ('lon','lat').
         """
         self.res = resolution
-        self.table = project(self.table, res=resolution,columns=columns,**kwargs)
+        self.table = project(self.table, res=resolution, columns=columns, **kwargs)
         return self
-        
-    def head(self,n : int = 5):
+
+    def head(self, n: int = 5):
         """Wrapper around the head function."""
-        head(self,n=n)
+        head(self, n=n)
 
-
-    def change_res(self,levels,transforms = None,**kwargs):
-        """Change resolution by a fixed 'delta' value. 
-        Can be a positive of negative integer. The resulting resolution 
-        will be equal to the current one plus the delta value. 
-        The restriciton is that the final resolution has to be 
-        within the accepted limits. 
+    def change_res(self, levels, transforms=None, **kwargs):
+        """Change resolution by a fixed 'delta' value.
+        Can be a positive of negative integer. The resulting resolution
+        will be equal to the current one plus the delta value.
+        The restriciton is that the final resolution has to be
+        within the accepted limits.
         """
-        return change_res(self,levels=levels,transform_expr=transforms)
-        
+        return change_res(self, levels=levels, transform_expr=transforms)
 
     def set_res(self):
-        """Set the reolution of a layer to a given one as target. 
-        If no column containing h3_ids is present, 
+        """Set the reolution of a layer to a given one as target.
+        If no column containing h3_ids is present,
         project the data to that resolution.
         """
-        pass
-    
+
     def restore(self):
-        """Reloads the original data from the 'src' attribute. 
-        Usefull to reset the layer after some manipulations have 
-        been done and information potentially lost. 
+        """Reloads the original data from the 'src' attribute.
+        Usefull to reset the layer after some manipulations have
+        been done and information potentially lost.
         Overwrites the current state of the layer ?
         """
-        pass
 
     def add_centr(self):
         return add_centr(self)
-    
-    def add_geom(self,column = "h3_id"):
+
+    def add_geom(self, column="h3_id"):
         # add_centr
         # add_geom
         return add_geom(self, column=column)
 
-    def reindex(self,names_from=None,values_from="id",values_agg="count",values_fill=0,**kwargs,):
+    def reindex(
+        self,
+        names_from=None,
+        values_from="id",
+        values_agg="count",
+        values_fill=0,
+        **kwargs,
+    ):
         # reindex
-        return reindex(self, names_from=names_from,values_agg=values_agg,values_from=values_from,values_fill=values_fill,**kwargs)
+        return reindex(
+            self,
+            names_from=names_from,
+            values_agg=values_agg,
+            values_from=values_from,
+            values_fill=values_fill,
+            **kwargs,
+        )
 
-    def rescale(self, weight : ib.Table,weight_var : str = "weight_var", weight_geom : str = "geometry", weight_id : str = "id", keep_left : str = None ,keep_right : str = None):
+    def rescale(
+        self,
+        weight: ib.Table,
+        weight_var: str = "weight_var",
+        weight_geom: str = "geometry",
+        weight_id: str = "id",
+        keep_left: str | None = None,
+        keep_right: str | None = None,
+    ):
         # rescale
-        return rescale(self, weight, weight_var, weight_geom, weight_id, keep_left,keep_right)
+        return rescale(
+            self, weight, weight_var, weight_geom, weight_id, keep_left, keep_right
+        )
 
-    def join(self,table2,predicates : list = ["h3_id"],how="outer"):
-        return join(self,table2,predicates,how)
+    def join(self, table2, predicates: list | None = None, how="outer"):
+        if predicates is None:
+            predicates = ["h3_id"]
+        return join(self, table2, predicates, how)
 
-    def constrain(self,):
+    def constrain(
+        self,
+    ):
         pass
-    
-    def voronoi(self,):
+
+    def voronoi(
+        self,
+    ):
         pass
 
-    def plot(self,):
+    def plot(
+        self,
+    ):
         pass
 
-geom_column = ["x","lon","lng","longitude","y","lat","ltd","latitude","geom","geometry"]
+
+geom_column = [
+    "x",
+    "lon",
+    "lng",
+    "longitude",
+    "y",
+    "lat",
+    "ltd",
+    "latitude",
+    "geom",
+    "geometry",
+]
 
 # class DataLayer(Layer):
 #     def __init__(self) -> None:
@@ -110,66 +153,73 @@ geom_column = ["x","lon","lng","longitude","y","lat","ltd","latitude","geom","ge
 
 #############
 
-class ScalenavProcess(Backend):
-    
-    src_db : str
 
-    def __init__(self,src_db = ':memory:',**kwargs) -> None:
-        """Initiate a duckDB connection with the spatial and H3 extensions.
-        """
+class ScalenavProcess(Backend):
+    src_db: str
+
+    def __init__(self, src_db=":memory:", **kwargs) -> None:
+        """Initiate a duckDB connection with the spatial and H3 extensions."""
 
         super().__init__()
 
         self.src_db = src_db
         # self.con = connect(database=src_db,**kwargs)
-        
+
         # Backend.__init__(self)
 
-        if src_db in ["memory", ':memory:', "mem"]:
+        if src_db in ["memory", ":memory:", "mem"]:
             print("Connecting to a temporary in-memory DB instance.")
             self.do_connect()
         elif os.path.exists(src_db):
             print("connecting to existing database.")
             self.do_connect(src_db)
-        else :
-            print("Creating database at'",src_db,"'.")
-            with connect(src_db) as con:
+        else:
+            print("Creating database at'", src_db, "'.")
+            with connect(src_db) as _:
                 pass
             self.do_connect(src_db)
-        
+
         self.raw_sql("""
-        INSTALL spatial; 
+        INSTALL spatial;
         LOAD spatial;
         INSTALL h3 FROM community;
         LOAD h3;
         """)
 
-    def add_table(self,name : str,path : str):
-        return table(conn=self,name = name, path = path)
+    def add_table(self, name: str, path: str):
+        return table(conn=self, name=name, path=path)
 
     def export() -> None:
-        """Save the underlying duckDB data base in it's current state. It contains the table schemas for future use.
-        """
-        pass
+        """Save the underlying duckDB data base in it's current state. It contains the table schemas for future use."""
 
-    def combine(self, name: str, layers : dict = {}):
-        return combine(conn=self,name=name,input=layers)
-        
-    def concat(self,**kwargs):
+    def combine(self, name: str, layers: dict | None = None):
+        if layers is None:
+            layers = {}
+        return combine(conn=self, name=name, input=layers)
+
+    def concat(self, **kwargs):
         return concat(**kwargs)
 
-    def create_table(self,name : str, obj : str,**kwargs): # -> ib.Table:
-        return Layer.__class__(super().create_table(name,obj=obj,**kwargs).op())
-        
-         
+    def create_table(self, name: str, obj: str, **kwargs):  # -> ib.Table:
+        return Layer.__class__(super().create_table(name, obj=obj, **kwargs).op())
+
 
 ##########
 
-def head(input : ib.Table,n : int = 5):
+
+def head(input: ib.Table, n: int = 5):
     print(input.count())
     print(input.head(n))
 
-def connect(database : str = ':memory:',interactive : bool = True, preload_ext : bool = True, community_ext : list = [], other_ext : list = [],**kwargs):
+
+def connect(
+    database: str = ":memory:",
+    interactive: bool = True,
+    preload_ext: bool = True,
+    community_ext: list | None = None,
+    other_ext: list | None = None,
+    **kwargs,
+):
     """Create a duckDB connection with spatial and H3 extensions loaded.
     For details on the additional parameters, refer to : https://duckdb.org/docs/stable/configuration/overview.html
 
@@ -190,27 +240,31 @@ def connect(database : str = ':memory:',interactive : bool = True, preload_ext :
     Returns
     --------------------
     ibis.Table
-        A ibis/duckDB connection object. 
+        A ibis/duckDB connection object.
 
     """
-    
+    if community_ext is None:
+        community_ext = []
+    if other_ext is None:
+        other_ext = []
+
     ib.options.interactive = interactive
 
-    if database in ["memory", ':memory:', "mem"]:
+    if database in ["memory", ":memory:", "mem"]:
         print("Connecting to a temporary in-memory DB instance.")
         conn = ib.duckdb.connect(**kwargs)
     elif os.path.exists(database):
         print("connecting to existing database.")
-        conn = ib.duckdb.connect(database,**kwargs)
-    else :
-        print("Creating database at '",database,"'.",sep="")
-        with ddb_connect(database,**kwargs) as con:
+        conn = ib.duckdb.connect(database, **kwargs)
+    else:
+        print("Creating database at '", database, "'.", sep="")
+        with ddb_connect(database, **kwargs) as _:
             pass
-        conn = ib.duckdb.connect(database,**kwargs)
+        conn = ib.duckdb.connect(database, **kwargs)
 
     if preload_ext:
         conn.raw_sql("""
-            INSTALL spatial; 
+            INSTALL spatial;
             LOAD spatial;
 
             INSTALL h3 FROM community;
@@ -223,14 +277,14 @@ def connect(database : str = ':memory:',interactive : bool = True, preload_ext :
                 INSTALL {ext} FROM community;
                 LOAD {ext};
             """)
-    
+
     if len(other_ext) > 0:
         for ext in other_ext:
             conn.raw_sql(f"""
                 INSTALL {ext};
                 LOAD {ext};
             """)
-    
+
     return conn
 
 
@@ -238,20 +292,21 @@ def unnest_h3(table):
     if "h3_id" in table.columns:
         if "h3_id" in table.select(s.of_type("array")).columns:
             return table.unnest("h3_id").mutate(band_var=1)
-    else :
+    else:
         return table
 
+
 def table(
-    conn, 
-    name : str, 
-    path : str,
-    coords = ["lon","lat"],
-    unnest : bool = True,
+    conn,
+    name: str,
+    path: str,
+    coords: list[str] | None = None,
+    unnest: bool = True,
     *args,
-    **kwargs
-    ):
+    **kwargs,
+):
     """Create a table in the database out of a parquet file.
-    This function 
+    This function
 
     Parameters
     -----------------
@@ -259,7 +314,7 @@ def table(
         an ibis connection to a duckDB database into which the table should be added
     name : str
         a name for the table, good practice is to give the same name as the python variable
-    path : str 
+    path : str
         a path to a parquet file or folder with parquet files with the data
     coords : list[str]
         the column names containing the coordinates
@@ -268,19 +323,21 @@ def table(
 
     Notes
     ---------------
-    The function support an additional keyword argument at the moment. You can provide a `bbox` to filter values from the data. The format for the parameter is [xmin,ymin,xmax,ymax]. 
+    The function support an additional keyword argument at the moment. You can provide a `bbox` to filter values from the data. The format for the parameter is [xmin,ymin,xmax,ymax].
     Another parameter is `overwrite` to overwirte an existing backend table with the same name.
 
 
     Returns
     ----------------
     ibis.Table
-        An ibis table object connected to the backend table. 
+        An ibis table object connected to the backend table.
     """
-    
+    if coords is None:
+        coords = ["lon", "lat"]
+
     q_startup = "create"
 
-    if "overwrite" in kwargs.keys():
+    if "overwrite" in kwargs:
         if kwargs["overwrite"]:
             print("Overwriting existing.")
             q_startup = "create or replace"
@@ -288,19 +345,21 @@ def table(
             if name in conn.list_tables():
                 return unnest_h3(conn.table(name))
 
-    if "bbox" in kwargs.keys():
+    if "bbox" in kwargs:
         print("Reading bbox")
-        conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}' where {coords[0]}>{kwargs["bbox"][0]} AND {coords[0]}<{kwargs["bbox"][2]} AND {coords[1]}>{kwargs["bbox"][1]} AND {coords[1]}<{kwargs["bbox"][3]});")
+        conn.raw_sql(
+            f"{q_startup} table {name} as (select * from '{path}' where {coords[0]}>{kwargs['bbox'][0]} AND {coords[0]}<{kwargs['bbox'][2]} AND {coords[1]}>{kwargs['bbox'][1]} AND {coords[1]}<{kwargs['bbox'][3]});"
+        )
         return unnest_h3(conn.table(name))
-    else : 
-        try :
+    else:
+        try:
             conn.raw_sql(f"{q_startup} table {name} as (select * from '{path}');")
             return unnest_h3(conn.table(name))
-        except:
+        except IbisError:
             if name in conn.list_tables():
                 print("Backend table exists, connected.")
                 return unnest_h3(conn.table(name))
-        raise Warning('Table could not be created. Check source file, or connection.')  
+        raise Warning("Table could not be created. Check source file, or connection.")
 
 
 def coords_columns(input : ib.Table) -> tuple[str,str]:
@@ -333,13 +392,13 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
 
     Parameters
     --------------
-    input : 
+    input :
         an ibis table
-    res : 
+    res :
         the resolution to project
-    columns : 
+    columns :
         The columns containing the coordinates if they have unusual names. In order (x,y). Anything like lon, y, easting should be automatically detected.
-    keep : 
+    keep :
         keep the original coordinates columns in the output
 
     Returns
@@ -387,40 +446,45 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
         col_y = input.columns[columns[1]]
         print(f"Using coordinates columns ('{col_x}','{col_y}')")
 
-    else :
+    else:
         raise ValueError("Could not recognise coordinates columns")
 
-
-    if keep :
-        return input.alias(alias_name).sql(f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
+    if keep:
+        return input.alias(alias_name).sql(
+            f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};"""
+        )
     else:
-        return input.alias(alias_name).sql(f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};""")
+        return input.alias(alias_name).sql(
+            f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};"""
+        )
 
 
-def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -> ib.Table :
+def change_res(
+    input: ib.Table, levels: int = 1, transform_expr: dict | None = None
+) -> ib.Table:
     """Projecting an H3 indexed table through scales in the DuckDB backend.
-        
-        Parameters
-        --------------
-        input : 
-            a table with an `h3_id` column containing the index values. 
-        levels : 
-            the number of resolutions to change. positive numbers mean increasing, negative decreasing
-        transform_expr : 
-            A dictionary with column names as keys and functions to perform in values. See details for more...
 
-        Notes
-        --------------
-        The transformation expression gives great flexibility on the actions to be performed on the columns of the table. It needs to be done in ibis. 
-        Refer to the docs for deeper explanation : https://ibis-project.org/reference/expression-generic
-        For negative `levels` values, the expression needs to perdofm an aggregation. For positive `levels`, it needs to be a mutation that is applied to the old values of each column.
-        
-        Returns
-        ---------------
-        ib.Table
-            A downscaled ibis table where the columns identified with a `_var` suffix have been aggregated or disaggregated depending on the direction of the scale change.
-        
-    
+    Parameters
+    --------------
+    input :
+        a table with an `h3_id` column containing the index values.
+    levels :
+        the number of resolutions to change. positive numbers mean increasing, negative decreasing
+    transform_expr :
+        A dictionary with column names as keys and functions to perform in values. See details for more...
+
+    Notes
+    --------------
+    The transformation expression gives great flexibility on the actions to be performed on the columns of the table. It needs to be done in ibis.
+    Refer to the docs for deeper explanation : https://ibis-project.org/reference/expression-generic
+    For negative `levels` values, the expression needs to perdofm an aggregation. For positive `levels`, it needs to be a mutation that is applied to the old values of each column.
+
+    Returns
+    ---------------
+    ib.Table
+        A downscaled ibis table where the columns identified with a `_var` suffix have been aggregated or disaggregated depending on the direction of the scale change.
+
+
     """
 
     # generate an alias to expose the tables in the back
@@ -428,68 +492,67 @@ def change_res(input : ib.Table,levels : int = 1,transform_expr : dict = None) -
 
     try:
         levels = int(levels)
-    except:
+    except ValueError:
         raise Warning("levels must be integer.")
-    
+
     # need to be already projected.
     if "h3_id" not in input.columns:
         raise Warning("Project data into h3 first with `project`.")
-    
-    if (input.count()==0).execute():
-        return input.select('h3_id',s.matches('_var$'))
+
+    if (input.count() == 0).execute():
+        return input.select("h3_id", s.matches("_var$"))
 
     res = (
-        input
-        .alias(alias_code)
+        input.alias(alias_code)
         .sql(f"Select h3_get_resolution(h3_id) as h3_res from {alias_code} limit 1;")[0]
         .as_scalar()
         .execute()
     )
 
-    _var = [val for val in input.columns if re.search(pattern="_var$",string=val)]
+    _var = [val for val in input.columns if re.search(pattern="_var$", string=val)]
 
-    if levels>0:
-        
-        rescale_factor = 7**(-levels)
-        # transformation expressions for navigating scales 
+    if levels > 0:
+        rescale_factor = 7 ** (-levels)
+        # transformation expressions for navigating scales
         if transform_expr is None:
-            transform_expr = { x : ( _[x] * rescale_factor ) for x in _var}
-        else : 
+            transform_expr = {x: (_[x] * rescale_factor) for x in _var}
+        else:
             for val in _var:
                 if val not in list(transform_expr.keys()):
-                    transform_expr[val] = ( _[val] * rescale_factor )
-    
+                    transform_expr[val] = _[val] * rescale_factor
+
         return (
-            input
-            .alias(alias_code)
-            .sql(f"""Select *, h3_cell_to_children(h3_id,{res+levels}) as new_h3_id from {alias_code};""")
+            input.alias(alias_code)
+            .sql(
+                f"""Select *, h3_cell_to_children(h3_id,{res + levels}) as new_h3_id from {alias_code};"""
+            )
             .unnest("new_h3_id")
             .mutate(**transform_expr)
             .drop("h3_id")
             .rename(h3_id="new_h3_id")
-)
-    
-    elif levels<=0:
-        
+        )
+
+    elif levels <= 0:
         if transform_expr is None:
-            transform_expr = { x : ( _[x].sum() ) for x in _var}
-        else : 
+            transform_expr = {x: (_[x].sum()) for x in _var}
+        else:
             for val in _var:
                 if val not in list(transform_expr.keys()):
-                    transform_expr[val] = ( _[val].sum() )
-        
-        
+                    transform_expr[val] = _[val].sum()
+
         return (
-            input
-            .alias(alias_code)
-            .sql(f"""Select * EXCEPT (h3_id), h3_cell_to_parent(h3_id,{res+levels}) as h3_id from {alias_code};""")
+            input.alias(alias_code)
+            .sql(
+                f"""Select * EXCEPT (h3_id), h3_cell_to_parent(h3_id,{res + levels}) as h3_id from {alias_code};"""
+            )
             .group_by("h3_id")
             .agg(**transform_expr)
-)
+        )
 
-def add_centr(input : ib.Table):
+
+def add_centr(input: ib.Table):
     """Add the centroid of a hex cell in the table expression.
-    
+
     Parameters
     ---------------
     input : ibis.Table
@@ -497,88 +560,109 @@ def add_centr(input : ib.Table):
 
     Returns
     ----------------
-    ib.Table    
+    ib.Table
         The table with a new column called `geom` containing centroids of cells from the `h3_id` column
 
     """
     # generate an alias to expose the tables in the back
     alias_code = alias_generator()
 
-    return (input
-            .alias(alias_code)
-            .sql(f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+    return input.alias(alias_code).sql(
+        f"""Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
                     FROM
-                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});""")
-)
+                        (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM {alias_code});"""
+    )
+
 
 def add_geom(layer, column="h3_id"):
-    
     alias = alias_generator()
-    
-    return layer.alias(alias).sql(f"""SELECT *, ST_GeomFromText(h3_cell_to_boundary_wkt({column}))::GEOMETRY as geometry from {alias};""")
+
+    return layer.alias(alias).sql(
+        f"""SELECT *, ST_GeomFromText(h3_cell_to_boundary_wkt({column}))::GEOMETRY as geometry from {alias};"""
+    )
 
 
-
-def reindex(input : ib.Table,names_from=None,values_from="id",values_agg="count",values_fill=0,) : 
-    """Transpose a variable containing categories associated to located data into an H3 
-    indexed table with new columns based on the categorical values. This performs a pivot. This is essentially a pivot that will be applied to a table in a way to 
-    make the h3_id column the index and a categorical variable associated to geolocated features into the columns of the output. 
+def reindex(
+    input: ib.Table,
+    names_from=None,
+    values_from="id",
+    values_agg="count",
+    values_fill=0,
+):
+    """Transpose a variable containing categories associated to located data into an H3
+    indexed table with new columns based on the categorical values. This performs a pivot. This is essentially a pivot that will be applied to a table in a way to
+    make the h3_id column the index and a categorical variable associated to geolocated features into the columns of the output.
     Values are aggregated by counting by default, but a function expression can be provided or another common function name as string.
-    
+
 
     Returns
-    ----------- 
+    -----------
     A table in which the h3_id column acts as an standard data table index.
 
     """
-    
+
     if names_from is None:
         names_from = input.select(s.of_type("string")).columns
 
-    return (input
-            .pivot_wider(
-                id_cols="h3_id",
-                names_from=names_from,
-                values_from=values_from,
-                values_agg=values_agg,
-                values_fill=values_fill,
-                )
-)
+    return input.pivot_wider(
+        id_cols="h3_id",
+        names_from=names_from,
+        values_from=values_from,
+        values_agg=values_agg,
+        values_fill=values_fill,
+    )
 
-def rescale(input : ib.Table, weight : ib.Table,weight_var : str = "weight_var", weight_geom : str = "geometry", weight_id : str = "id", keep_left : str = None ,keep_right : str = None) -> ib.Table : 
+
+def rescale(
+    input: ib.Table,
+    weight: ib.Table,
+    weight_var: str = "weight_var",
+    weight_geom: str = "geometry",
+    weight_id: str = "id",
+    keep_left: str | None = None,
+    keep_right: str | None = None,
+) -> ib.Table:
     """This function takes two layers, assuming the secong parameter contains the layer with data to downscale. Therefore the first layer is supposed to be spatially more granular.
     It intersects them and rescales the values from the second layer by weighting according to the first layer.
-    
+
     """
 
-    if "h3_id" in input.columns: 
+    if "h3_id" in input.columns:
         input = add_centr(input=input)
-        
+
     if weight_geom not in weight.columns:
-        weight_geom = [x for x in input.select(s.of_type("GEOMETRY")).columns if re.search(string=x,pattern="geom")][0]
-        print("Assuming geometry column ",weight_geom)
-    
+        weight_geom = next(
+            x
+            for x in input.select(s.of_type("GEOMETRY")).columns
+            if re.search(string=x, pattern="geom")
+        )
+        print("Assuming geometry column ", weight_geom)
+
     if weight_id not in weight.columns:
-        weight = weight.mutate(id = ib.row_number())
+        weight = weight.mutate(id=ib.row_number())
 
-    return (input
-     .join(
-         weight.select(weight_id,weight_var,weight_geom),
-         how="left",
-         predicates=input["geom"].intersects(weight[weight_geom]))
-     .select(~s.of_type("GEOMETRY"))
-     .mutate(
-        s.across(s.matches("_var$"),
-             _/_.sum().over(group_by=weight[weight_id]),
-             names="{col}_dens"))
-     .mutate(
-        s.across(s.matches("_dens$"),
-             _*weight[weight_var],
-             names="{col}_var"))
-     .select(~s.matches("_dens$"))
-)
+    return (
+        input.join(
+            weight.select(weight_id, weight_var, weight_geom),
+            how="left",
+            predicates=input["geom"].intersects(weight[weight_geom]),
+        )
+        .select(~s.of_type("GEOMETRY"))
+        .mutate(
+            s.across(
+                s.matches("_var$"),
+                _ / _.sum().over(group_by=weight[weight_id]),
+                names="{col}_dens",
+            )
+        )
+        .mutate(
+            s.across(s.matches("_dens$"), _ * weight[weight_var], names="{col}_var")
+        )
+        .select(~s.matches("_dens$"))
+    )
 
-def concat(input,**kwargs):
+
+def concat(input, **kwargs):
     """Stack and regroup a set of layers into 1. Similar effect to concat in pandas.
 
     Parameters
@@ -587,19 +671,25 @@ def concat(input,**kwargs):
 
     Returns
     -------
-    Layer 
+    Layer
         One combined layer of the inputs stacked
-    """    
-    
-    input = {key : val for key,val in input.items() if (val.count()>=1).execute()}
+    """
+
+    input = {key: val for key, val in input.items() if (val.count() >= 1).execute()}
 
     # if all(["h3_id" in tab.columns for tab in list(input.values())]):
     #     return ib.union(*list(input.values()),**kwargs)#.group_by("h3_id").agg()
-    return ib.union(*list(input.values()),**kwargs)
+    return ib.union(*list(input.values()), **kwargs)
 
 
-def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = False, fill_val : float = 0):
-    """Provide a dict with named tables, the keys will be reused to create variable names in the binded data. 
+def combine(
+    conn,
+    input: dict[str, ib.Table],
+    name: str,
+    overwrite: bool = False,
+    fill_val: float = 0,
+):
+    """Provide a dict with named tables, the keys will be reused to create variable names in the binded data.
     Similar effect to rbind in R.
 
     Parameters
@@ -609,7 +699,7 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
     input : dictionary of ibis tables
         A dictionary containing the tables used in the process.
     name : str
-        The name of the new table that will be created in the backend 
+        The name of the new table that will be created in the backend
     overwrite : bool, optional
         overwrite a table with the same name if it already exists, by default False
     fill_val : float
@@ -620,26 +710,38 @@ def combine(conn, input : dict[str,ib.Table], name : str, overwrite : bool = Fal
     ib.Table
         An ibis table which is an outer merge of all the provided tables
 
-    """    
-    id_col = ib.union(*[tab.select("h3_id") for tab in list(input.values())],distinct=True)
-    
-    for (nam,tab) in input.items():
+    """
+    id_col = ib.union(
+        *[tab.select("h3_id") for tab in list(input.values())], distinct=True
+    )
+
+    for nam, tab in input.items():
         if "band_var" in tab.columns:
-            tab = tab.rename({nam + "_var" : "band_var"})
-            id_col = id_col.join(tab,how="left",predicates="h3_id",rname=f"{nam}_{{{'name'}}}_var").drop(s.matches("h3_id_var"))
-        else :
-            id_col = id_col.join(tab,how="left",predicates="h3_id",rname=f"{nam}_{{{'name'}}}_var").drop(s.matches("h3_id_var"))
-    
+            tab = tab.rename({nam + "_var": "band_var"})
+            id_col = id_col.join(
+                tab, how="left", predicates="h3_id", rname=f"{nam}_{{{'name'}}}_var"
+            ).drop(s.matches("h3_id_var"))
+        else:
+            id_col = id_col.join(
+                tab, how="left", predicates="h3_id", rname=f"{nam}_{{{'name'}}}_var"
+            ).drop(s.matches("h3_id_var"))
+
     id_col_vars = id_col.select(s.matches("_var$")).columns
 
-    return conn.create_table(name,obj=id_col.fill_null({col : fill_val for col in id_col_vars}),overwrite=overwrite)#
+    return conn.create_table(
+        name,
+        obj=id_col.fill_null({col: fill_val for col in id_col_vars}),
+        overwrite=overwrite,
+    )
 
 
-def simplify(table,geometry="geometry",tolerance=.1, include = True, preserve_topology = True):
+def simplify(
+    table, geometry="geometry", tolerance=0.1, include=True, preserve_topology=True
+):
     """Simplify a geometry column in a table. The ibis geospatial method is not registered for a duckdb backend, so this is a workaround.
-    
+
     See : https://duckdb.org/docs/stable/core_extensions/spatial/functions.html#st_simplify
-    
+
     Parameters
     ----------
     table : ib.Table
@@ -657,24 +759,23 @@ def simplify(table,geometry="geometry",tolerance=.1, include = True, preserve_to
     -------
     ib.Table
         _description_
-    """    
+    """
 
     alias = alias_generator()
-    
-    
+
     if include:
-        head_query = f"""SELECT * EXCLUDE {geometry}, {geometry}::GEOMETRY as {geometry}"""
-    else : 
+        head_query = (
+            f"""SELECT * EXCLUDE {geometry}, {geometry}::GEOMETRY as {geometry}"""
+        )
+    else:
         head_query = f"""SELECT * EXCLUDE {geometry}"""
         # return table.alias(alias).sql(include_query + """, ST_SIMPLIFY({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};""")
     if preserve_topology:
         tail_query = f""",ST_SimplifyPreserveTopology({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};"""
-    else : 
+    else:
         tail_query = f""",ST_SIMPLIFY({geometry}::GEOMETRY, {tolerance}) as {geometry}_simple FROM {alias};"""
 
     return table.alias(alias).sql(head_query + tail_query)
-
-
 
 
 def constrain(layer, constraint):
@@ -686,11 +787,10 @@ def constrain(layer, constraint):
         _description_
     constraint : _type_
         _description_
-    """    
-    pass
+    """
 
 
-def voronoi(layer, limit=10): 
+def voronoi(layer, limit=10):
     """UNDER DEV
 
     Parameters
@@ -704,31 +804,37 @@ def voronoi(layer, limit=10):
     -------
     _type_
         _description_
-    """    
+    """
     alias = alias_generator()
     h3_fill = (
-        layer
-        .select("h3_id")
+        layer.select("h3_id")
         .alias(alias)
         .sql(f"SELECT h3_grid_disk(h3_id,10) as h3_gridded from {alias};")
         .select("h3_gridded")
         .unnest("h3_gridded")
         .distinct()
     )
-    
-    # geom_voronoi = 
+
+    # geom_voronoi =
     for j in range(limit):
-        if h3_fill.count().execute()>0:
-            layer_int = layer.select("h3_id").alias(alias).sql(f"SELECT h3_id, h3_grid_disk(h3_id,{j}) as h3_gridded from {alias};").unnest("h3_gridded").distinct(on="h3_gridded")
+        if h3_fill.count().execute() > 0:
+            layer_int = (
+                layer.select("h3_id")
+                .alias(alias)
+                .sql(
+                    f"SELECT h3_id, h3_grid_disk(h3_id,{j}) as h3_gridded from {alias};"
+                )
+                .unnest("h3_gridded")
+                .distinct(on="h3_gridded")
+            )
             h3_fill = h3_fill.filter(~_.h3_gridded.isin(layer_int.h3_gridded))
-        else :
+        else:
             break
     return layer_int.group_by("h3_id").agg(h3_gridded=_.h3_gridded.collect())
 
 
-
-def join(table1,table2,predicates : list = ["h3_id"],how="outer"):
-    """Nicer way to outer merge two tables than proposed by ibis. 
+def join(table1, table2, predicates: list | None = None, how="outer"):
+    """Nicer way to outer merge two tables than proposed by ibis.
     Essentially remove the double columns corresponding to the original predicates.
 
     Parameters
@@ -746,29 +852,27 @@ def join(table1,table2,predicates : list = ["h3_id"],how="outer"):
     -------
     _type_
         _description_
-    """    
-    
-    if how=="inner":
+    """
+    if predicates is None:
+        predicates = ["h3_id"]
+
+    if how == "inner":
         # if inner do the same.
-        return ib.join(table1,table2,predicates=predicates,how="inner")
+        return ib.join(table1, table2, predicates=predicates, how="inner")
     # otherwise do this
     return (
-        ib.join(
-            table1,
-            table2,
-            predicates=predicates,
-            how=how,
+        ib.join(table1, table2, predicates=predicates, how=how)
+        .mutate(
+            **{
+                val: ib.ifelse(_[val].isnull(), _[val + "_right"], _[val])
+                for val in predicates
+            }
         )
-        .mutate(**{
-            val : ib.ifelse(_[val].isnull(),_[val + "_right"],_[val]) for val in predicates
-        })
-        .select(
-            ~s.cols(*[f"{val}_right" for val in predicates])
-        )
-    ) 
+        .select(~s.cols(*[f"{val}_right" for val in predicates]))
+    )
 
 
-def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
+def knn(input: [ib.Table, Layer], k: int = 1, colname=None):
     """
 
     Parameters
@@ -789,8 +893,8 @@ def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
     ------
     IndexError
         _description_
-    """    
-    
+    """
+
     if "h3_id" not in input.columns:
         raise IndexError("h3_id column not found.")
     if colname is None:
@@ -801,7 +905,7 @@ def knn(input : [ib.Table,Layer], k : int = 1,colname = None):
     """)
 
 
-def reduce(table, columns : dict, exclude : bool = True, print_query : bool = False):
+def reduce(table, columns: dict, exclude: bool = True, print_query: bool = False):
     """Aggregate columns in a table on the backend side. Only supports addition of variables at the moment.
 
     Parameters
@@ -809,8 +913,8 @@ def reduce(table, columns : dict, exclude : bool = True, print_query : bool = Fa
     table : ibis.Table
         An ibis table.
     columns : dict
-        A dict matching the desired result to the columns that need aggretgation in the existing table. 
-        The key will be used as column name in the return, and the value should be list of columns to add together or a regex matching these columns. 
+        A dict matching the desired result to the columns that need aggretgation in the existing table.
+        The key will be used as column name in the return, and the value should be list of columns to add together or a regex matching these columns.
         Ex : { "KL" : '[K-L]' } will match columns containing K,L and add them into a column named 'KL'
     exclude : bool, optional
         Exclude the original columns from the returned table, by default True
@@ -819,7 +923,7 @@ def reduce(table, columns : dict, exclude : bool = True, print_query : bool = Fa
     -------
     an ibis Table
         An ibis table where the desired aggregation has been applied.
-    """    
+    """
 
     alias = alias_generator()
 
@@ -849,22 +953,12 @@ def reduce(table, columns : dict, exclude : bool = True, print_query : bool = Fa
         print("Running query : ", full_query)
 
     if exclude:
-        return (
-            table
-            .alias(alias)
-            .sql(full_query)
-            .select(~s.cols(*all_values))
-        )
+        return table.alias(alias).sql(full_query).select(~s.cols(*all_values))
     else:
-        return (
-            table
-            .alias(alias)
-            .sql(full_query)
-        )
+        return table.alias(alias).sql(full_query)
 
 
-
-def fill_poly(table,res : int = 10, geometry = "geometry"):
+def fill_poly(table, res: int = 10, geometry="geometry"):
     """Fill a geometry column containing polygons with H3 cells.
 
     Parameters
@@ -880,19 +974,16 @@ def fill_poly(table,res : int = 10, geometry = "geometry"):
         A table with a new column called 'h3_id' containing a list of cell indices for each geometry.
     """
 
-    alias= alias_generator()
-    
-    return (
-        table
-        .alias(alias)
-        .sql(f"""
+    alias = alias_generator()
+
+    return table.alias(alias).sql(f"""
             SELECT *,
             h3_polygon_wkt_to_cells_string(ST_AsText({geometry}::GEOMETRY),{res}) as h3_id
             FROM {alias};
         """)
-    )
 
-def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
+
+def dump_fill_h3(table, res=10, geometry="geometry", keep: bool = False):
     """Dump and fill with H3 cells
 
     Does not preserve order of values.
@@ -909,49 +1000,50 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
     Returns
     -------
     ibis Table
-        A table where only the polygonal geometries are preserved, 
-        the multipolygons are unnested into individual polygons and then filled with h3 cells. 
-        Because of that, the order and original number of rows is not preserved. 
-    """    
-    
+        A table where only the polygonal geometries are preserved,
+        the multipolygons are unnested into individual polygons and then filled with h3 cells.
+        Because of that, the order and original number of rows is not preserved.
+    """
+
     alias = alias_generator()
     alias_geometry = alias_generator()
     alias_lon = alias_generator()
     alias_lat = alias_generator()
 
-    h3_collect_win = ib.window(preceding=0,following=0)
+    h3_collect_win = ib.window(preceding=0, following=0)
 
     res_multi = (
-        table
-        .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
-        .filter(_[geometry].geometry_type()=="MULTIPOLYGON")
+        table.mutate(**{geometry: _[geometry].try_cast("GEOMETRY")})
+        .filter(_[geometry].geometry_type() == "MULTIPOLYGON")
         .alias(alias)
-        .sql(f"""SELECT *, ST_DUMP({geometry}::GEOMETRY) as {alias_geometry} from {alias}""") # ::GEOMETRY
+        .sql(
+            f"""SELECT *, ST_DUMP({geometry}::GEOMETRY) as {alias_geometry} from {alias}"""
+        )  # ::GEOMETRY
         .unnest(alias_geometry)
-        .mutate(**{alias_geometry : _[alias_geometry]['geom']}) # might not need to .map here
-        .mutate(**{
-            alias_lon : _[alias_geometry].centroid().x(),
-            alias_lat : _[alias_geometry].centroid().y(),
-        })
+        .mutate(
+            **{alias_geometry: _[alias_geometry]["geom"]}
+        )  # might not need to .map here
+        .mutate(
+            **{
+                alias_lon: _[alias_geometry].centroid().x(),
+                alias_lat: _[alias_geometry].centroid().y(),
+            }
+        )
         .pipe(
             project,
-            columns=(alias_lon,alias_lat),
+            columns=(alias_lon, alias_lat),
             res=res,
             keep=False,
         )
         .mutate(
-            h3_id_temp= _.h3_id.collect().over(h3_collect_win),
+            h3_id_temp=_.h3_id.collect().over(h3_collect_win),
         )
-        .rename({"h3_id_temp" : "h3_id"})
+        .rename({"h3_id_temp": "h3_id"})
         # .drop('h3_id')
-        .pipe(
-            fill_poly,
-            res=res,
-            geometry=alias_geometry
-        )
+        .pipe(fill_poly, res=res, geometry=alias_geometry)
         .mutate(
-            h3_id = ib.ifelse(
-                _.h3_id.length()==0,
+            h3_id=ib.ifelse(
+                _.h3_id.length() == 0,
                 _.h3_id_temp,
                 _.h3_id,
             )
@@ -959,13 +1051,14 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
     )
 
     res_poly = (
-        table
-        .mutate(**{geometry : _[geometry].try_cast("GEOMETRY")})
-        .filter(_[geometry].geometry_type()=="POLYGON")
-        .mutate(**{
-            alias_lon : _[geometry].centroid().x(),
-            alias_lat : _[geometry].centroid().y(),
-        })
+        table.mutate(**{geometry: _[geometry].try_cast("GEOMETRY")})
+        .filter(_[geometry].geometry_type() == "POLYGON")
+        .mutate(
+            **{
+                alias_lon: _[geometry].centroid().x(),
+                alias_lat: _[geometry].centroid().y(),
+            }
+        )
         .pipe(
             project,
             res=res,
@@ -976,19 +1069,17 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
             keep=False,
         )
         .mutate(
-            h3_id_temp= _.h3_id.collect().over(h3_collect_win),
+            h3_id_temp=_.h3_id.collect().over(h3_collect_win),
         )
-        .rename({"h3_id_temp" : "h3_id"})
-        .pipe(
-            fill_poly,
-            res=res,
-            geometry=geometry
+        .rename({"h3_id_temp": "h3_id"})
+        .pipe(fill_poly, res=res, geometry=geometry)
+        .mutate(
+            h3_id=ib.ifelse(
+                _.h3_id.length() == 0,
+                _.h3_id_temp,
+                _.h3_id,
+            )
         )
-        .mutate(h3_id = ib.ifelse(
-            _.h3_id.length()==0,
-            _.h3_id_temp,
-            _.h3_id,
-        ))
     )
 
     # print(res_multi.columns)
@@ -1001,50 +1092,49 @@ def dump_fill_h3(table, res = 10, geometry="geometry", keep : bool = False):
     # print(geometry)
 
     if keep:
-        multipoly_cols = [alias_geometry,"h3_id_temp",]
-        poly_cols = ["h3_id_temp",]
-        
-        return (
-            concat({
-                "res_multi" : (
-                    res_multi
-                    .select(~s.cols(*multipoly_cols))
-                    .try_cast({geometry : "GEOMETRY"})
-                    ),
-                "res_poly" : (
-                    res_poly
-                    .select(~s.cols(*poly_cols))
-                    .try_cast({geometry : "GEOMETRY"})
+        multipoly_cols = [
+            alias_geometry,
+            "h3_id_temp",
+        ]
+        poly_cols = [
+            "h3_id_temp",
+        ]
+
+        return concat(
+            {
+                "res_multi": (
+                    res_multi.select(~s.cols(*multipoly_cols)).try_cast(
+                        {geometry: "GEOMETRY"}
+                    )
                 ),
-            })
+                "res_poly": (
+                    res_poly.select(~s.cols(*poly_cols)).try_cast(
+                        {geometry: "GEOMETRY"}
+                    )
+                ),
+            }
         )
 
     else:
-        multipoly_cols = [geometry,alias_geometry,"h3_id_temp"]
-        poly_cols = [geometry,"h3_id_temp"]
+        multipoly_cols = [geometry, alias_geometry, "h3_id_temp"]
+        poly_cols = [geometry, "h3_id_temp"]
 
-        return (
-            concat({
-                "res_multi" : (
-                    res_multi
-                    .select(~s.cols(*multipoly_cols))
-                    ),
-                "res_poly" : (
-                    res_poly
-                    .select(~s.cols(*poly_cols))
-                    ),
-            })
+        return concat(
+            {
+                "res_multi": (res_multi.select(~s.cols(*multipoly_cols))),
+                "res_poly": (res_poly.select(~s.cols(*poly_cols))),
+            }
         )
 
 
 def rast_fill_h3(
-    layer, 
-    envelope, 
-    res : int = 7, 
-    geometry : bool = True, 
-    columns : list[str] = ['band_var'],
-    ):
-    """Transform a set of points into a h3 voronoi. 
+    layer,
+    envelope,
+    res: int = 7,
+    geometry: bool = True,
+    columns: list[str] | None = None,
+):
+    """Transform a set of points into a h3 voronoi.
     Usefull for converting rasters where only the centroid is given (ex : outputs of rastapar) into H3 covers.
     Highly efficient function, requires careful usage as the outputs can get VERY big.
 
@@ -1052,7 +1142,7 @@ def rast_fill_h3(
 
     Parameters
     ----------
-    layer : ibis table 
+    layer : ibis table
         Typically rastapar output, or the following columns are needed : lon, lat, band_var.
     envelope : a shapely box, or polygon
         Limits for the Voronoi process
@@ -1061,10 +1151,11 @@ def rast_fill_h3(
     geometry : bool, optional
         Whether to return the geometries, by default False
 
-    """    
+    """
+    if columns is None:
+        columns = ["band_var"]
 
     alias = alias_generator()
-    alias_row_id = alias_generator()
     alias_geom = alias_generator()
     alias_weight = alias_generator()
     alias_voronoi = alias_generator()
@@ -1074,38 +1165,41 @@ def rast_fill_h3(
     # print(alias_weight)
     # print(alias_voronoi)
 
-    layer_geom = (
-        layer
-        .mutate(**{
-            alias_geom : _.lon.point(_.lat),
-        })
+    layer_geom = layer.mutate(
+        **{
+            alias_geom: _.lon.point(_.lat),
+        }
     )
 
     # Build the geometries fo hexagons
-    #  
+    #
     layer_geom_vor = (
-        layer_geom
-        .select(
-            alias_geom
+        layer_geom.select(alias_geom)
+        .agg(
+            **{
+                alias_geom: _[alias_geom].try_cast("GEOMETRY").unary_union(),
+            }
         )
-        .agg(**{
-            alias_geom : _[alias_geom].try_cast("GEOMETRY").unary_union(),
-        })
         .alias(alias)
-        .sql(f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
-        """)
-        .mutate(**{
-            alias_voronoi : _[alias_voronoi].intersection(envelope).try_cast("GEOMETRY")
-        })
+        .sql(
+            f"""SELECT UNNEST(st_dump(ST_VoronoiDiagram({alias_geom}::GEOMETRY)))['geom'] as {alias_voronoi} from {alias};
+        """
+        )
+        .mutate(
+            **{
+                alias_voronoi: _[alias_voronoi]
+                .intersection(envelope)
+                .try_cast("GEOMETRY")
+            }
+        )
         # .mutate(**{
         #     alias_row_id : ib.row_number()
         # })
     )
-    
 
     # print(layer_geom)
     # print(layer_geom_vor)
-    
+
     return_layer = (
         layer_geom
         # .drop(s.of_type("GEOMETRY"))
@@ -1113,30 +1207,21 @@ def rast_fill_h3(
         .join(
             layer_geom_vor,
             predicates=_[alias_geom].intersects(layer_geom_vor[alias_voronoi]),
-            how='inner'
-        ) # alias_row_id
-        .select(
-            ~s.cols(alias_geom)
+            how="inner",
+        )  # alias_row_id
+        .select(~s.cols(alias_geom))
+        .pipe(dump_fill_h3, geometry=alias_voronoi, res=res, keep=False)
+        .mutate(
+            **{
+                alias_weight: _.h3_id.length(),
+            }
         )
-        .pipe(
-            dump_fill_h3,
-            geometry=alias_voronoi,
-            res=res,
-            keep=False
-        )
-        .mutate(**{
-            alias_weight : _.h3_id.length(),
-        })
-        .unnest('h3_id')
-        .mutate(**{
-            val : _[val]/_[alias_weight] for val in columns
-        })
-        .select(
-            ~s.cols(alias_weight)
-        )
+        .unnest("h3_id")
+        .mutate(**{val: _[val] / _[alias_weight] for val in columns})
+        .select(~s.cols(alias_weight))
     )
 
     if geometry:
         return return_layer.pipe(add_geom)
-    else :
+    else:
         return return_layer

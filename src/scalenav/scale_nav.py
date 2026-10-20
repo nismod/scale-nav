@@ -1,16 +1,18 @@
 # scale_down.py
 # import geopandas as gpd
-from geopandas import GeoDataFrame, GeoSeries
+from re import compile, search
+
 import h3
+from geopandas import GeoDataFrame, GeoSeries
+from ibis import Table
 
 # import pandas as pd
 from pandas import DataFrame
-from re import search, compile
-from scalenav.utils import res_upper_limit, res_lower_limit, child_num
-from ibis import Table
+
+from scalenav.utils import child_num, res_lower_limit, res_upper_limit
 
 
-def set_res(grid: [DataFrame, GeoDataFrame], final: int = 8) -> [DataFrame, GeoDataFrame]:  # type: ignore
+def set_res(grid: DataFrame | GeoDataFrame, final: int = 8) -> DataFrame | GeoDataFrame:  # type: ignore
     """Similarly to the change_scale function, but sets the resolution to a specific value.
 
     Parameters
@@ -35,10 +37,11 @@ def set_res(grid: [DataFrame, GeoDataFrame], final: int = 8) -> [DataFrame, GeoD
     return change_res(grid=grid, level=levels)
 
 
-def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, GeoDataFrame]:  # type: ignore
+def change_res(
+    grid: DataFrame | GeoDataFrame, level: int = 1
+) -> DataFrame | GeoDataFrame:
+    """Change scale of a data frame using the H3 hieararchical index. Should any str containing column ( apart from osm_id ) be assumed as a factor ?
 
-    f"""Change scale of a data frame using the H3 hieararchical index. Should any str containing column ( apart from osm_id ) be assumed as a factor ?
-    
     Parameters
     ------------
 
@@ -72,8 +75,8 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
     try:
         grid.drop(columns="geom", inplace=True)
         print("Skipping geom")
-    except:
-        """"""
+    except KeyError:
+        pass
 
     if int(level) >= 2:
         grid["h3_id"] = grid.h3_id.apply(h3.cell_to_children)
@@ -88,7 +91,6 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
         return grid
 
     if int(level) == -1:
-
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid = (
             grid.groupby("parent")
@@ -100,7 +102,6 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
         return grid
 
     if int(level) <= -2:
-
         grid["parent"] = grid.h3_id.apply(h3.cell_to_parent)
         grid = (
             grid.groupby("parent")
@@ -115,7 +116,7 @@ def change_res(grid: [DataFrame, GeoDataFrame], level: int = 1) -> [DataFrame, G
     return Warning("Could not successfully change scale.")
 
 
-def add_geom(grid: [DataFrame, GeoDataFrame], crs="EPSG:4326") -> GeoDataFrame:  # type: ignore
+def add_geom(grid: DataFrame | GeoDataFrame, crs="EPSG:4326") -> GeoDataFrame:  # type: ignore
     """Add the geometries of the cells to a data frame projected on the H3 grid. Using the h3_id column as reference.
 
     Parameters
@@ -135,9 +136,7 @@ def add_geom(grid: [DataFrame, GeoDataFrame], crs="EPSG:4326") -> GeoDataFrame: 
 
 def h3_add_centr(input: Table):
     """Add centroid coordinates of h3 cell to table. Useful for further spatial operations."""
-    return input.alias("t_dens").sql(
-        """
-                 Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom 
-                 FROM (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens) 
-                 AS h3_geom;"""
-    )
+    return input.alias("t_dens").sql("""
+                 Select * EXCLUDE latlng, ST_POINT(latlng[2],latlng[1]) as geom
+                 FROM (SELECT *, h3_cell_to_latlng(h3_id) as latlng FROM t_dens)
+                 AS h3_geom;""")

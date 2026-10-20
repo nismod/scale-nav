@@ -6,25 +6,24 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'scalenav'
-copyright = '2024, Ivann Schlosser'
-author = 'Ivann Schlosser'
+project = "scalenav"
+copyright = "2024, Ivann Schlosser"
+author = "Ivann Schlosser"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.intersphinx',
-              # 'myst_parser',
-              'sphinx.ext.napoleon',
-            #   "nbsphinx",
-              'myst_nb',         
-              'sphinx.ext.autosummary',
-               ]
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
+    "myst_nb",
+    "sphinx.ext.autosummary",
+]
 
 autosummary_generate = True
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = []
 
 # Napoleon settings
@@ -47,8 +46,8 @@ napoleon_attr_annotations = True
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'furo'
-html_static_path = ['_static']
+html_theme = "furo"
+html_static_path = ["_static"]
 # html_baseurl = ''
 html_theme_options = {
     # "github_url": "https://github.com/nismod/scale-nav",
@@ -67,13 +66,11 @@ html_theme_options = {
     # "navigation_with_keys": False,
 }
 
-source_suffix = {'.rst': 'restructuredtext',
-                 '.md': 'markdown',
-                 '.ipynb': 'myst-nb'}
+source_suffix = {".rst": "restructuredtext", ".md": "markdown", ".ipynb": "myst-nb"}
 # myst-nb
 # source_suffix = [".md",".rst",".ipynb"]
 
-nb_execution_mode = "off" # "cache"   
+nb_execution_mode = "off"  # "cache"
 
 # Automatically extract typehints when specified and place them in
 # descriptions of the relevant function/method.

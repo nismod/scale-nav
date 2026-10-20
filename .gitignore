@@ -13,9 +13,9 @@ sql/
 pre_pub.sh
 .vscode/
 .coverage
-source/
-src/scalenav/__pycache__/
-src/scalenav/model/__pycache__/
 test_memray/
 tests.ipynb
-tests/__pycache__/
+__pycache__
+cache
+.venv
+.ipynb_checkpoints

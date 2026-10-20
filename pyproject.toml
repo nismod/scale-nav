@@ -5,41 +5,57 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "scalenav"
 version = "0.0.8"
-
 authors = [
-  { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },
+  { name = "Ivann Schlosser", email = "ivann.schlosser@ouce.ox.ac.uk" },
 ]
 maintainers = [
-  { name="Ivann Schlosser", email="ivann.schlosser@ouce.ox.ac.uk" },
+  { name = "Ivann Schlosser", email = "ivann.schlosser@ouce.ox.ac.uk" },
+  { name = "Tom Russell", email = "tom.russell@ouce.ox.ac.uk" },
 ]
-
 description = "A package to project all sorts of data on the H3 grid and manipulate it at different spatial scales."
-
 readme = "README.md"
-
 dependencies = [
-    "numpy",
-    "pandas",
-    "pyarrow==21.0.0",
-    'duckdb==1.3.2',
-    "tqdm",
-    "pypalettes",
-    "rasterio",
-    "shapely",
-    "geopandas",
-    'h3==4.0.0b3',
-    "pytest",
+  'duckdb>=1.5.5',
+  'h3>=4.0.0',
+  "geopandas",
+  "ibis-framework[duckdb,geospatial]",
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "pyarrow>=23.0.1",
+  "pypalettes",
+  "rasterio",
+  "scikit-learn",
+  "scipy",
+  "sentence-transformers",
+  "shapely",
+  "tqdm",
 ]
-
 requires-python = ">=3.12"
-
 classifiers = [
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
-license = {text = "MIT License"}
-keywords = ['hierarchical index','rescaling','geospatial']
+license = { file = "LICENSE.txt" }
+keywords = ['hierarchical index', 'rescaling', 'geospatial']
+
+[project.optional-dependencies]
+dev = ["flit", "pytest", "ruff"]
+docs = [
+  "contextily",
+  "folium>=0.12",
+  "furo",
+  "ipykernel",
+  "mapclassify",
+  "myst-nb",
+  "osmnx",
+  "pydeck",
+  "rioxarray",
+  "seaborn",
+  "sphinx-design",
+  "sphinx"
+]
 
 [project.urls]
 Homepage = "https://github.com/nismod/scale-nav"
@@ -51,7 +67,6 @@ rastapar = "scalenav.rast_convert_par:rast_converter"
 
 [project.gui-scripts]
 rastapar = "scalenav.rast_convert_par:rast_converter"
-
 
 [tool.flit.external-data]
 directory = "data"

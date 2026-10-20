@@ -1,21 +1,9 @@
-import re
-import itertools as iter
-import numpy as np
-
-# data
-import pandas as pd
-
-# import shapely
-from scalenav.plotting import cmap
-
 import ibis as ib
-from ibis import _
-
-ib.options.interactive = True
-
+import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
+ib.options.interactive = True
 #####
 
 light_lm = "all-MiniLM-L6-v2"
