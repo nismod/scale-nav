@@ -15,7 +15,7 @@ maintainers = [
 description = "A package to project all sorts of data on the H3 grid and manipulate it at different spatial scales."
 readme = "README.md"
 dependencies = [
-  'duckdb>=1.5.5',
+  'duckdb>=1.3.0',
   'h3>=4.0.0',
   "geopandas",
   "ibis-framework[duckdb,geospatial]",
