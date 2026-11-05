@@ -26,26 +26,27 @@ from scalenav.rast_converter import (
 
 # #region agent log
 def _dbg_log(location, message, data=None, hypothesis_id=None):
-    try:
-        r = resource.getrusage(resource.RUSAGE_SELF)
-        rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
+    pass
+    # try:
+    #     r = resource.getrusage(resource.RUSAGE_SELF)
+    #     rss_mb = (r.ru_maxrss * 1024 if sys.platform != "darwin" else r.ru_maxrss) / 1e6
 
-        with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "a") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "location": location,
-                        "message": message,
-                        "data": data or {},
-                        "rss_mb": round(rss_mb, 2),
-                        "hypothesisId": hypothesis_id,
-                        "pid": os.getpid(),
-                    }
-                )
-                + "\n"
-            )
-    except (FileNotFoundError, PermissionError):
-        pass
+    #     with open("/Users/cenv1069/Documents/scale_nav/.cursor/debug.log", "w") as f:
+    #         f.write(
+    #             json.dumps(
+    #                 {
+    #                     "location": location,
+    #                     "message": message,
+    #                     "data": data or {},
+    #                     "rss_mb": round(rss_mb, 2),
+    #                     "hypothesisId": hypothesis_id,
+    #                     "pid": os.getpid(),
+    #                 }
+    #             )
+    #             + "\n"
+    #         )
+    # except (FileNotFoundError, PermissionError):
+    #     pass
 
 
 # #endregion
