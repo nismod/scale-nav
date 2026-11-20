@@ -386,7 +386,7 @@ def coords_columns(input : ib.Table) -> tuple[str,str]:
     return col_x, col_y
 
 
-def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False) -> ib.Table: # type: ignore
+def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False, suffix:str = None) -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns,
     return a table with a new column resulting from generating h3 ids for the points at given h3 resolution.
 
@@ -451,11 +451,11 @@ def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep 
 
     if keep:
         return input.alias(alias_name).sql(
-            f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};"""
+            f"""Select *, h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id{"_"+suffix if suffix else suffix} from {alias_name};"""
         )
     else:
         return input.alias(alias_name).sql(
-            f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id from {alias_name};"""
+            f"""Select * EXCLUDE ({col_x},{col_y}), h3_h3_to_string(h3_latlng_to_cell({col_y},{col_x},{res})) as h3_id{"_"+suffix if suffix else suffix} from {alias_name};"""
         )
 
 
