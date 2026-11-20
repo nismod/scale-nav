@@ -386,7 +386,25 @@ def coords_columns(input : ib.Table) -> tuple[str,str]:
     return col_x, col_y
 
 
-def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False, suffix:str = None) -> ib.Table: # type: ignore
+@ib.udf.scalar.builtin(name="h3_latlng_to_cell")
+def _h3_latlng_to_cell(lat: float, lon: float, resolution: int) -> int:
+    ...
+
+
+@ib.udf.scalar.builtin(name="h3_h3_to_string")
+def _h3_h3_to_string(cell: int) -> str:
+    ...
+
+
+def project_col(tab, x, y, res):
+    lon = tab[x] if isinstance(x, str) else x
+    lat = tab[y] if isinstance(y, str) else y
+
+    # DuckDB's H3 function takes latitude before longitude.
+    return _h3_h3_to_string(_h3_latlng_to_cell(lat, lon, res))
+
+
+def project(input : ib.Table,res : int = 8, columns : [tuple,None] = None, keep = True, for_gridding : bool = False, suffix:str = "") -> ib.Table: # type: ignore
     """Given an ibis table with coordinates columns,
     return a table with a new column resulting from generating h3 ids for the points at given h3 resolution.
 
